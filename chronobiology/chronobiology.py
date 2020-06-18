@@ -12,7 +12,7 @@ class DBQuery():
     """
     Class to access InfluxDB and get records from it.
     
-    Initialisation:
+    Initialization:
     ---
     
     DBQuery(database, username, password, host='localhost', port=8086)
@@ -169,6 +169,11 @@ class DBQuery():
         return [x[1] for x in self.client.query(query).raw['series'][0]['values']]
     
     
+    def get_measurements(self):
+        query = f"SHOW MEASUREMENTS;"
+        return [x[0] for x in self.client.query(query).raw['series'][0]['values']]
+    
+    
     def get_data(self, series, fields, keys=None, start=None, stop=None, local_tz=False):
         
         def _tz_convert(t, local_tz=False):
@@ -253,91 +258,81 @@ class DBQuery():
             if ftypes[field] == np.dtype('O'):
                 result[field] = result[field].astype('U')
         return result
-
+ 
 class CycleAnalyzer():
     """
     Class to analyze circadian cycles given timestamp data.
     
-    Initialisation:
+    Initialization:
     ---
     
-    CycleAnalyzer(timeseries, night=('18:00', '06:00'), step='5m', start=None, stop=None, descr='',
-                  max_gap='1m', min_duration='0m', *, min_count=2, activity_threshold=1)
-    * timeseries -- numpy 1D array of timestamps of type '<M8[ns]' (numpy.datetime64 with 'ns' precision). This 
-      timeseries should represent activity events.
-    * night -- Sequence of night interval start and stop boundaries or sequence of such sequences for each day.
-      Night boundaries can be given as integer (nanoseconds) or as a string in one of the following formats: 'H', 
-      'HH', 'H:MM', 'HH:MM' ('6', '06', '6:00' and '06:00' indicate same time). Overall number of night boundaries
-      should be even and it is assumed that after night start boundary next item will indicate night end boundary. 
-      The timestamp for the last boundary for the day can be less than previous and that indicates wrapping around 
-      day boundary: ('18:00', '06:00') means that intervals from 18:00 to 24:00 on the current day and interval 
-      from 00:00 to '06:00' on the next day are treated as night. If only one night sequence provided then this 
-      sequence will be used for all days. To provide different night intervals for each day use the following form:
-      night=([day1_night1_b1, day1_night1_b2, day1_night2_b1, ...], [day2_night1_b1, ...], ... [dayn_night1_b1, ...]).
-      When night is specified for each day the number of night boundaries for some of the days can be odd given that 
-      overall number of boundaries is even. For example this is valid: night=(['22'], ['04', '20'], ['04', '18', '24']).
-      Any of '0', '0:00', '00', '00:00', '24' or '24:00' can be used to indicate end of the day. Optional.
-    * step -- Default discretization step. If method uses discretization and discretization step is not specified for
-      that method call then this value will be used for all such methods invoked from this instance. String, integer, 
+    CycleAnalyzer(timestamps, activity=None, night=None, step='1m', start=None, stop=None, * , 
+                  descr='', max_gap='1m', min_duration='1m', min_activity=1, min_data_points=1)
+    * timestamps -- Numpy 1D array of timestamps (numpy.datetime64). It is timestamps of activity records. Required.
+    * activity -- Optional numpy 1D array of integers or floats. Number of activity events associated with 
+        each timestamp. If not supplied then each will be assumed that at each timestamp t here is exactly 1 activity 
+        event. Essentially it is the weights used for each timestamp during binning.
+    * night -- Optional boolean array, denoting whether there was night (night[i] == True) or day (night[i] == False)
+        at i'th timestamp. If not supplied then will be assumed that there was night at each timestamp. During binning
+        if there are conflicting values for night in bin (timestamps with both night == True and night == False fall 
+        into bin) then night == True will be written for that bin (i.e. night == True overrides night == False).
+    * step -- Discretization step. All data will be disretized by binning it into bins of this size. String, integer, 
       timedelta or any other type which can be converted to timedelta.
-    * start -- Inclusive lower time boundary for returned data. Only records with time >= start will be returned.
-      None indicates no lower boundary. String, int or any other type which can be convetred do datetime. Optional.
-    * stop -- Exclusive upper time boundary for returned data. Only records with time < stop will be returned.
-      None indicates no upper boundary. String, int or any other type which can be convetred do datetime. Optional.
-    * descr -- Textual description that will be added to the end of plot headings. Can be used to specify the 
-      source of timeseries data on the plots (for example to specify what specimen(s) was used to generate timeseries).
-      Optional.
-    * max_gap -- Maximal gap between two consecutive activity events to treat them as belonging to the same activity 
-      bout. String, integer, timedelta or any other type which can be converted to timedelta.
-    * min_duration -- Minimal duration of activity bout to consider it as valid. String, integer, timedelta or any 
+    * start -- Inclusive date for lower data boundary. Only records with time.day() >= start will be processed. None 
+      indicates that lower boundary will be calculated from data. Date, string, int or any other type which can be 
+      convetred to date.
+    * stop -- Exclusive date for upper data boundary. Only records with time.day() < stop will be processed. None 
+      indicates that upper boundary will be calculated from data. Date, string, int or any other type which can be 
+      convetred to date.
+    * descr -- Textual description that will be added to the end of plot headings. Can be used to specify the  source 
+      of timeseries data on the plots (for example to specify what specimen(s) was used to generate timeseries).
+    * max_gap -- Maximal gap between two consecutive activity events. Consecutive events with distance between them
+      larger than max_gap will belong to different activity bouts. String, integer, timedelta or any other type which 
+      can be converted to timedelta.
+    * min_duration -- Minimal duration of activity bout. Activity bouts with shorter duration (defined as time difference
+      between the last activity evnt in a bout and the firs one) will be discarded. String, integer, timedelta or any 
       other type which can be converted to timedelta.
-    * min_count -- Minimal count of activity events in the activity bout to consider it valid. Values less than 2 will
-      lead to possibility of activity bouts with 0 duration (if min_duration is 0), so they are not recommended. 
-      Integer.
-    * activity_threshold -- Minimum number of activity events in a day to consider that day in analysis. Used to filter out 
-      days when experiment was not going or when activity was not large enough for valid analysis.
+    * min_activity -- Minimal value of (binned) activity. Discretized time points with activity less than min_activity
+      will be discarded during activity bout calculations. E.g. if step = '5 min' and min_activity = 50 then data will
+      be discretized into 5 minute bins and during activity bout calculation bins with activity < 50 will be treated as
+      if no activity was occuring at their respective intervals. Number.
+    * min_data_points -- Minimum number of activity events in a day to consider that day in analysis. Used to filter out 
+      days when experiment was not going or when activity was not large enough for valid statistical analysis. Integer.
     
     Attributes:
     ---
     
-    * start -- Lower time boundary to analyze. If start is passed during class initialisation it will be equal to that
-      value, otherwise it will be start of the day of the first activity record (i.e. if first record has timestamp 
-      '2020-01-01 01:05' then start will be equal to '2020-01-01 00:00:00.' if explicit start value is not passed to 
-      the constructor). numpy.dtype('datetime64[ns]').
-    * stop -- Adjusted upper boundary to analyze. Adjustment made by increasing stop argument passed to instance 
-      constructor in such a way that difference between start and stop timestamps constitutes whole number of days. 
-      numpy.numpy.dtype('datetime64[ns]').
-    Note 1:
-      Despite this adjustment the data with timestamps larger than original stop timestamp that was passed to class 
-      constructor will never be included (i.e. if class is initialized with start='2020-01-01 06:00' and 
-      stop='2020-02-02 18:00' then adjusted stop value will be '2020-02-03 06:00' but timestamps older than 
-      '2020-02-02 18:00' will not be included even if they are present in original timeseries).
-    * activity -- Property that return all activity events that was selected during class initialisation and wasn't
-      filtered out due to low daily activity. Its value will change if data will be refiltered. numpy.array with
-      shape=(?,) and dtype='datetime64[ns]' (? in shape indicates any value).
-    * bouts -- Precalculated bouts to be used in class methods when bouts=True is passed to them. numpy.array with
-      shape=(?, 2) and dtype='datetime64[ns]'. bouts[:, 0] hold bout start timestamps and bouts[:, 1] hold bout 
-      end timestamps.
-    * step -- Default discretization step that will be used for methods of this class. numpy.timedelta64.
+    * start -- Adjusted lower time boundary (inclusive) of data included in analysis. Due to start time adjustion it will 
+      be different from 00:00:00 but it is guaranteed that CycleAnalyzer.start will belong to the same day (date) as the 
+      start argument passed in class initialization (or that it will fall in the same day as first timestamp in timestamps
+      argument if start argument was None).
+    * stop -- Adjusted upper time boundary (exclusive) of data included in analysis. Due to start time adjustion it will 
+      be different from 00:00:00 but it is guaranteed that CycleAnalyzer.stop will be no less than stop argument passed
+      during class initialization and that CycleAnalyzer.stop - CycleAnalyzer.start will be equal to the whole number of
+      days.
+    * step -- Discretization step that was used to bin input data.
+    * steps_per_day -- Numbers of steps (bins) in a day.
     * descr -- Text that will be prepended to all plot headings. String.
-    * total_days -- Total number of days (including those that were filtered out) between start and stop timestamps.
-      Integer.
-    * mask -- numpy boolean 1D array of length total_days. Holds True for days that wasn't filteret and False for 
-      filtered out days. numpy.array with shape=(total_days,) and dtype='bool'.
-    * days -- Number of days that wasn't filtered out due to low activity, days=mask.sum(). Integer.
-    * day_indices -- numpy 2D array day indices which indicates starts (inclusive) and ends (exclusive) of 
-      consecutive non-foltered day intervals. day_indices[:, 0] holds starting day indices and day_indices[:, 0]
-      holds ending day indices. If n is length of day_indices 1st dimension then for any A<n it will be true that
-      mask[day_indices[A, 0] : day_indices[A, 1]] will hold only True values, and all mask values that don't fall 
-      between day_indices[S, 0] (inclusive) and day_indices[S, 1] (exclusive) for some S will be False. Put another
-      way np.hstack([np.arange(s, e) for [s, e] in day_indices]) will return indices of all mask values that are True.
-    * activity_threshold -- Minimal number of activity events in a day to consider it in an analysis. Integer.
-    * night -- list of numpy 2D arrays of night interval start and end times expressed as hours. Length of list is
-      equal to total_days. Shape of numpy arrays for each day is (?, 2) where first axis can vary between days 
-      (different days can have different number of night intervals) but for day d night[d][:, 0] hold start times 
-      for that days' night intervals (expressed as offset from the beginning of calendar day) and night[d][:, 1] 
-      hold end times for that days' night intervals (expressed in the same way). List of numpy.array with 
-      shape=(?, 2) and dtype='timedelta64[ns]'.
+    * total_days -- Total number of days (including those that were filtered out) between start and stop timestamps. E.g.
+      data timespan in days.
+    * days -- Number of days that wasn't filtered out due to low activity, days=mask.sum(). days <= total_days
+    * daily_mask -- Numpy boolean 1D array of length total_days. Holds True for days that wasn't filteret and False for 
+      filtered out days.
+    * min_data_points -- Same as __init__ argument.
+    * max_gap -- Same as __init__ argument, but converted to numpy timedelta64[m] (minute precision).
+    * min_duration -- Same as __init__ argument, but converted to numpy timedelta64[m] (minute precision).
+    * min_activity -- Same as __init__ argument.
+    * timestamps -- Property that returns filtered out bin starts (discrete time points) as 1D numpy array. Timestamps 
+      filtered so they don't include points at days where number of daily data points < min_data_points.
+    * activity -- Property that return activity counts associated with each timestamp as 1D numpy array. activity[i]
+      holds number of activity counts that occured in time interval between timestamps[i] and timestamps[i] + step.
+    * night -- Property that return night value associated with each timestamp as 1D numpy array. night[i] indicates 
+      whether there was night during time interval between timestamps[i] and timestamps[i] + step. True values indicate 
+      that there was night (light was turned off) while False values indicate that during that time interval light was
+      turned on.
+    * bouts -- Precalculated bouts to be used in class methods when bouts=True is passed to them. Numpy integer 1D array 
+      that holds 1 for timestamps that falls into activity bout and 0 otherwise.
+    
     
     Methods:
     ---
@@ -356,89 +351,57 @@ class CycleAnalyzer():
     
     ---
     
-    select_dates(start=None, stop=None, bouts=False)
+    filter_inactive(min_data_points=1)
     
-    Returns activity events (bouts=False) or activity bouts (bouts=True) that fall between specified start (inclusive) 
-    and stop (exclusive) timestamps. Does not include activity that was filtered out by mask.
-    
-    Timeseries can be either 1D array of datetimes or 2D array of dateteimes with second dimension equal to 2 in which
-    case it is treated as array of time intervals (intervals begin at timeseries[:, 0] and end at timeseries[:, 1]).
+    Re-filters days based on new minimal daily number of data points. All subsequent class method calls will use new 
+    filtered days. Returns None.
     
     Arguments:
-    * start -- Inclusive lower time boundary for returned data. Only records with time >= start will be returned.
-      None indicates no lower boundary. String, int or any other type which can be convetred do datetime. Optional.
-    * stop -- Exclusive upper time boundary for returned data. Only records with time < stop will be returned.
-      None indicates no upper boundary. String, int or any other type which can be convetred do datetime. Optional.
-    * bouts -- Flag that indicates whether values from activity events or activity bouts will be returned. Bool.
+    * min_data_points -- Minimum number of data points (records) in a day to keep it. Days with less data points (records)
+      will be filtered out.
     
     ---
     
-    filter_inactive(activity_threshold=1)
+    activity_bouts(max_gap=None, min_duration=None, min_activity=None):
     
-    Refilters days based on new minimal activity. All subsequent method calls will use new filtered days. Returns None.
-    
-    Arguments:
-    * activity_threshold -- minimum number of activity events in a day to consider that day in analysis. Used to filter out 
-      days when experiment was not going or when activity was not large enough for valid analysis. Integer.
-    
-    ---
-    
-    activity_bouts(max_gap='1m', min_duration='0m', min_count=2):
-    
-    Returns activity bouts calculated from self.activity using provided parameters. Does not unpdate self.bouts -- 
-    use adjust_bouts() for that.
+    Returns activity bouts calculated using provided parameters. Does not unpdate self.bouts, use update_bouts() for that.
     
     Arguments:
-    * max_gap -- Maximal gap between two consecutive activity events to treat them as belonging to the same activity 
-      bout. String, integer, timedelta or any other type which can be converted to timedelta.
-    * min_duration -- Minimal duration of activity bout to consider it as valid. String, integer, timedelta or any 
+    * max_gap -- Maximal gap between two consecutive activity events. Consecutive events with distance between them
+      larger than max_gap will belong to different activity bouts. String, integer, timedelta or any other type which 
+      can be converted to timedelta.
+    * min_duration -- Minimal duration of activity bout. Activity bouts with shorter duration (defined as time difference
+      between the last activity evnt in a bout and the firs one) will be discarded. String, integer, timedelta or any 
       other type which can be converted to timedelta.
-    * min_count -- Minimal count of activity events in the activity bout to consider it valid. Values less than 2 will
-      lead to possibility of activity bouts with 0 duration (if min_duration is 0), so they are not recommended.
-      Integer.
+    * min_activity -- Minimal value of (binned) activity. Discretized time points with activity less than min_activity
+      will be discarded during activity bout calculations. E.g. if step = '5 min' and min_activity = 50 then data will
+      be discretized into 5 minute bins and during activity bout calculation bins with activity < 50 will be treated as
+      if no activity was occuring at their respective intervals. Number.
     
     ---
     
-    adjust_bouts(max_gap='1m', min_duration='0m', min_count=2):
+    adjust_bouts(max_gap=None, min_duration=None, min_activity=None):
     
-    Recalculates activity bouts based on self.activity using provided parameters and updates self.bouts. Returns None.
+    Recalculates activity bouts using provided parameters and updates self.bouts. Returns None.
     
     Intended to be used to update activity bouts used by other methods.
     
     Arguments:
-    * max_gap -- Maximal gap between two consecutive activity events to treat them as belonging to the same activity 
-      bout. String, integer, timedelta or any other type which can be converted to timedelta.
-    * min_duration -- Minimal duration of activity bout to consider it as valid. String, integer, timedelta or any 
+    * max_gap -- Maximal gap between two consecutive activity events. Consecutive events with distance between them
+      larger than max_gap will belong to different activity bouts. String, integer, timedelta or any other type which 
+      can be converted to timedelta.
+    * min_duration -- Minimal duration of activity bout. Activity bouts with shorter duration (defined as time difference
+      between the last activity evnt in a bout and the firs one) will be discarded. String, integer, timedelta or any 
       other type which can be converted to timedelta.
-    * min_count -- Minimal count of activity events in the activity bout to consider it valid. Values less than 2 will
-      lead to possibility of activity bouts with 0 duration (if min_duration is 0), so they are not recommended.
-      Integer.
+    * min_activity -- Minimal value of (binned) activity. Discretized time points with activity less than min_activity
+      will be discarded during activity bout calculations. E.g. if step = '5 min' and min_activity = 50 then data will
+      be discretized into 5 minute bins and during activity bout calculation bins with activity < 50 will be treated as
+      if no activity was occuring at their respective intervals. Number.
     
     ---
     
-    discretize(step=None, bouts=False)
-    
-    Groups activity events (bouts=False) or activity bouts (bouts=True) in the bins of size step. Bins span time period
-    between self.start and self.stop. Returns tuple of numpy 1D arrays: first of them represents bin starting times 
-    (dtype='datetime64[ns]') and second represents event counts for each bin (bouts=False, dtype='int64') or activity 
-    coverage represented as floats between 0.0 and 1.0, inclusive (bouts=True, dtype='float64').
-    
-    When bouts=True activity coverage is calculated as ratio of overlapping between bin time intervals and activity 
-    bouts time intervals. For example, if there are 3 activity bouts (['01:30', '03:00'], ['04:30', '06:00'] and 
-    ['16:00', '27:00']), step='5 minutes' and discretization  then there will be 6 bins with start times ['00:00', 
-    '05:00', '10:00', '15:00', '20:00', '25:00']; first bout overlaps only 1st bin and amount of overlap is 1.5 minutes, 
-    second bout overlaps 1st and 2nd bins and amounts of overlap are 0.5 and 1 minute, third bout overlaps 4th, 5th and 
-    6th bins and amounts of overlap are 4, 5 and 2 minutes; coverage for bins will be [(1.5+0.5)/5, 1/5, 0/5, 4/5, 5/5, 
-    2/5] = [0.4, 0.2, 0.0, 0.8, 1.0, 0.4]
-    
-    Arguments:
-    * step -- Bin size, if None instance defaul step will be used. None or string, integer, timedelta or any other type 
-    which can be converted to timedelta.
-    * bouts -- Flag that indicates whether discrtetization will be based on activity events or activity bouts. Bool.
-    
-    ---
-    
-    plot_actogram(step=None, bouts=True, width=1000, height=100, filename=None, dpi=96)
+    plot_actogram(step=None, bouts=False, activity_onset='none', percentile=20, N='6h', M='6h',
+                  filename=None, width=1000, height=100, dpi=96)
     
     Plots double actogram with right half shifted by 1 day. Night intervals for each day are also plotted on actogram.
     
@@ -448,6 +411,14 @@ class CycleAnalyzer():
     * step -- Bin size, if None instance default step will be used. None or string, integer, timedelta or any other type 
       which can be converted to timedelta.
     * bouts -- Flag that indicates whether calculation will be based on activity events or activity bouts. Bool.
+    * activity_onset -- If not 'none' (literal string) then it should be name of one of the modes that 
+      plot_activity_onset() accepts in which case activity onsets will be marked on actogram.
+    * percentile -- Defines which percentile of daily non-zero activity will be considered as potential candidate for 
+      activity onset. Integer.
+    * N -- Determines length of period of negative values (daytime, left part) in convolution kernel. String, integer, 
+      timedelta or any other type which can be converted to timedelta.
+    * M -- Determines length of period of positive values (nighttime, right part) in convolution kernel. String, integer, 
+      timedelta or any other type which can be converted to timedelta.
     * filename -- Name of the file to save plot to. If None plot will be displayed instead.
     * width -- Plot width in pixels.
     * height -- Plot height in pixels.
@@ -516,37 +487,37 @@ class CycleAnalyzer():
     
     ---
     
-    interdaily_stability(step=None, bouts=False)
+    interdaily_stability(step='1h', bouts=False)
     
     Calculates and returns interdaily stability. Returned value is a single float in range [0, 1], inclusive.
     
     Arguments:
-    * step -- Step size for generating periods, if None instance default step will be used. None or string, integer, 
-      timedelta or any other type which can be converted to timedelta.
+    * step -- Bin size, if None instance default step will be used. None or string, integer, timedelta or any other type 
+      which can be converted to timedelta.
     * bouts -- Flag that indicates whether calculation will be based on activity events or activity bouts. Bool.
     
     ---
     
-    intradaily_variability(step=None, bouts=False)
+    intradaily_variability(step='1h', bouts=False)
     
     Calculates intradaily variability and returns tuple (daily, total) where daily is numpy array with 
     shape=(self.days,) which holds intradaily variability calculated for each day and total is intradaily variability 
     calculated on data for all days (in general total != daily.mean()).
     
     Arguments:
-    * step -- Step size for generating periods, if None instance default step will be used. None or string, integer, 
-      timedelta or any other type which can be converted to timedelta.
+    * step -- Bin size, if None instance default step will be used. None or string, integer, timedelta or any other type 
+      which can be converted to timedelta.
     * bouts -- Flag that indicates whether calculation will be based on activity events or activity bouts. Bool.
     
     ---
     
-    plot_intradaily_variability(step=None, bouts=False, filename=None, width=1000, height=600, dpi=96)
+    plot_intradaily_variability(step='1h', bouts=False, filename=None, width=1000, height=600, dpi=96)
     
     Calculates and plots intradaily variability for each day. Plot also includes value based on data for all days.
     
     Arguments:
-    * step -- Step size for generating periods, if None instance default step will be used. None or string, integer, 
-      timedelta or any other type which can be converted to timedelta.
+    * step -- Bin size, if None instance default step will be used. None or string, integer, timedelta or any other type 
+      which can be converted to timedelta.
     * bouts -- Flag that indicates whether calculation will be based on activity events or activity bouts. Bool.
     * filename -- Name of the file to save plot to. If None plot will be displayed instead.
     * width -- Plot width in pixels.
@@ -555,15 +526,13 @@ class CycleAnalyzer():
     
     ---
     
-    relative_amplitude(step=None, most_active='10h', least_active='5h', bouts=False)
+    relative_amplitude(most_active='10h', least_active='5h', bouts=False)
     
     Calculates relative amplitude and returns tuple (daily, total) where daily is numpy array with 
     shape=(self.days,) which holds relative amplitude calculated for each day and total is relative amplitude 
     calculated on data for all days (in general total != daily.mean()).
     
     Arguments:
-    * step -- Step size for generating periods, if None instance default step will be used. None or string, integer, 
-      timedelta or any other type which can be converted to timedelta.
     * most_active -- Length of most active period. String, integer, timedelta or any other type which can be 
       converted to timedelta.
     * least_active -- Length of least active period. String, integer, timedelta or any other type which can be 
@@ -572,14 +541,12 @@ class CycleAnalyzer():
     
     ---
     
-    plot_relative_amplitude(step=None, most_active='10h', least_active='5h', bouts=False, 
+    plot_relative_amplitude(most_active='10h', least_active='5h', bouts=False, 
                             filename=None, width=1000, height=600, dpi=96)
     
     Calculates and plots relative amplitude for each day. Plot also includes value based on data for all days.
     
     Arguments:
-    * step -- Step size for generating periods, if None instance default step will be used. None or string, integer, 
-    timedelta or any other type which can be converted to timedelta.
     * most_active -- Length of most active period. String, integer, timedelta or any other type which can be 
       converted to timedelta.
     * least_active -- Length of least active period. String, integer, timedelta or any other type which can be 
@@ -592,47 +559,49 @@ class CycleAnalyzer():
     
     ---
     
-    daily_bouts(max_gap=None, min_duration=None, min_count=None, timescale='1s'):
+    daily_bouts(max_gap=None, min_duration=None, min_activity=None):
     
     Calculates activity bouts based on provided parameters and then for each day calculates number of activity bouts 
     and average activity bout duration. Returns tuple (bout_counts, bout_durations) where bout_counts and bout_durations
     are numpy 1D arrays.
     
-    If some of max_gap, min_duration or min_count is None then values provided during class initialization or in a last
+    If some of max_gap, min_duration or min_activity is None then values provided during class initialization or in a last
     call to adjust_bouts() will be used.
     
     Arguments:
-    * max_gap -- Maximal gap between two consecutive activity events to treat them as belonging to the same activity 
-      bout. None, string, integer, timedelta or any other type which can be converted to timedelta.
-    * min_duration -- Minimal duration of activity bout to consider it as valid. None, string, integer, timedelta or any 
+    * max_gap -- Maximal gap between two consecutive activity events. Consecutive events with distance between them
+      larger than max_gap will belong to different activity bouts. String, integer, timedelta or any other type which 
+      can be converted to timedelta.
+    * min_duration -- Minimal duration of activity bout. Activity bouts with shorter duration (defined as time difference
+      between the last activity evnt in a bout and the firs one) will be discarded. String, integer, timedelta or any 
       other type which can be converted to timedelta.
-    * min_count -- Minimal count of activity events in the activity bout to consider it valid. Values less than 2 will
-      lead to possibility of activity bouts with 0 duration (if min_duration is 0), so they are not recommended.
-      None or integer.
-    * timescale -- Timescale of bout durations. Bout durations will be calculated in nanoseconds and then divided by this
-      parameter. String, integer, timedelta or any other type which can be converted to timedelta.
+    * min_activity -- Minimal value of (binned) activity. Discretized time points with activity less than min_activity
+      will be discarded during activity bout calculations. E.g. if step = '5 min' and min_activity = 50 then data will
+      be discretized into 5 minute bins and during activity bout calculation bins with activity < 50 will be treated as
+      if no activity was occuring at their respective intervals. Number.
       
     ---
     
-    plot_daily_bouts(max_gap=None, min_duration=None, min_count=None, timescale='1s', 
+    plot_daily_bouts(max_gap=None, min_duration=None, min_activity=None, 
                      filename=None, width=1000, height=600, dpi=96)
     
     Calculates and plots number of activity bouts and average bout duration for each day. Bout counts pplotted as bar plot
     on left y-axis and average bout durations plotted as line plot on right y-axis.
     
-    If some of max_gap, min_duration or min_count is None then values provided during class initialization or in a last
+    If some of max_gap, min_duration or min_activity is None then values provided during class initialization or in a last
     call to adjust_bouts() will be used.
     
     Arguments:
-    * max_gap -- Maximal gap between two consecutive activity events to treat them as belonging to the same activity 
-      bout. None, string, integer, timedelta or any other type which can be converted to timedelta.
-    * min_duration -- Minimal duration of activity bout to consider it as valid. None, string, integer, timedelta or any 
+    * max_gap -- Maximal gap between two consecutive activity events. Consecutive events with distance between them
+      larger than max_gap will belong to different activity bouts. String, integer, timedelta or any other type which 
+      can be converted to timedelta.
+    * min_duration -- Minimal duration of activity bout. Activity bouts with shorter duration (defined as time difference
+      between the last activity evnt in a bout and the firs one) will be discarded. String, integer, timedelta or any 
       other type which can be converted to timedelta.
-    * min_count -- Minimal count of activity events in the activity bout to consider it valid. Values less than 2 will
-      lead to possibility of activity bouts with 0 duration (if min_duration is 0), so they are not recommended.
-      None or integer.
-    * timescale -- Timescale of bout durations. Bout durations will be calculated in nanoseconds and then divided by this
-      parameter. String, integer, timedelta or any other type which can be converted to timedelta.
+    * min_activity -- Minimal value of (binned) activity. Discretized time points with activity less than min_activity
+      will be discarded during activity bout calculations. E.g. if step = '5 min' and min_activity = 50 then data will
+      be discretized into 5 minute bins and during activity bout calculation bins with activity < 50 will be treated as
+      if no activity was occuring at their respective intervals. Number.
     * filename -- Name of the file to save plot to. If None plot will be displayed instead.
     * width -- Plot width in pixels.
     * height -- Plot height in pixels.
@@ -640,24 +609,25 @@ class CycleAnalyzer():
     
     ---
     
-    plot_bout_histogram(max_gap=None, min_duration=None, min_count=None, timescale='1s', bins=20,
+    plot_bout_histogram(max_gap=None, min_duration=None, min_activity=None, bins=50,
                         filename=None, width=1000, height=600, dpi=96)
     
     Calcultes activity bouts based on provided parameters and plots histogram of their duration distribution.
     
-    If some of max_gap, min_duration or min_count is None then values provided during class initialization or in a last
+    If some of max_gap, min_duration or min_activity is None then values provided during class initialization or in a last
     call to adjust_bouts() will be used.
     
     Arguments:
-    * max_gap -- Maximal gap between two consecutive activity events to treat them as belonging to the same activity 
-      bout. None, string, integer, timedelta or any other type which can be converted to timedelta.
-    * min_duration -- Minimal duration of activity bout to consider it as valid. None, string, integer, timedelta or any 
+    * max_gap -- Maximal gap between two consecutive activity events. Consecutive events with distance between them
+      larger than max_gap will belong to different activity bouts. String, integer, timedelta or any other type which 
+      can be converted to timedelta.
+    * min_duration -- Minimal duration of activity bout. Activity bouts with shorter duration (defined as time difference
+      between the last activity evnt in a bout and the firs one) will be discarded. String, integer, timedelta or any 
       other type which can be converted to timedelta.
-    * min_count -- Minimal count of activity events in the activity bout to consider it valid. Values less than 2 will
-      lead to possibility of activity bouts with 0 duration (if min_duration is 0), so they are not recommended.
-      None or integer.
-    * timescale -- Timescale of bout durations. Bout durations will be calculated in nanoseconds and then divided by this
-      parameter. String, integer, timedelta or any other type which can be converted to timedelta.
+    * min_activity -- Minimal value of (binned) activity. Discretized time points with activity less than min_activity
+      will be discarded during activity bout calculations. E.g. if step = '5 min' and min_activity = 50 then data will
+      be discretized into 5 minute bins and during activity bout calculation bins with activity < 50 will be treated as
+      if no activity was occuring at their respective intervals. Number.
     * bins -- Number of bins in a histogram. This argument will be passed to pyplot.hist so it can be an integer or a 
       sequence of bin start and end times.
     * filename -- Name of the file to save plot to. If None plot will be displayed instead.
@@ -667,329 +637,419 @@ class CycleAnalyzer():
     
     ---
     
-    activity_onset(step=None, percentile=20, N=6, M=6, bouts=False)
+    activity_onset(step=None, percentile=20, N='6h', M='6h', bouts=False, mode='step')
     
     Calculates activity onset for each day. Returns numpy array with shape=(self.days,) and dtype='datetime64[ns]'.
     
     Note that array returned by this function is timestamps (i.e. they include date) not timedeltas (offsets for each day).
     
     Arguments:
-    * step -- Step size for generating periods, if None instance default step will be used. None or string, integer, 
-      timedelta or any other type which can be converted to timedelta.
+    * step -- Bin size, if None instance default step will be used. None or string, integer, timedelta or any other type 
+      which can be converted to timedelta.
     * percentile -- Defines which percentile of daily non-zero activity will be considered as potential candidate for 
       activity onset. Integer.
-    * N -- Determines length of period of -1's in convolution kernel. String, integer, timedelta or any other type which 
-      can be converted to timedelta.
-    * M -- Determines length of period of 1's in convolution kernel. String, integer, timedelta or any other type which 
-      can be converted to timedelta.
+    * N -- Determines length of period of negative values (daytime, left part) in convolution kernel. String, integer, 
+      timedelta or any other type which can be converted to timedelta.
+    * M -- Determines length of period of positive values (nighttime, right part) in convolution kernel. String, integer, 
+      timedelta or any other type which can be converted to timedelta.
     * bouts -- Flag that indicates whether calculation will be based on activity events or activity bouts. Bool.
+    * mode -- Defines shape of convolution kernel. Every kernel has discontinuity where left and righ par connect (values
+      around discontinuity are -1 and 1 for left and right parts respectively). For kernels other than 'step' left part is
+      decreasing from 0 to -1 and right part is decreasing from 1 to 0, i.e. parts of kernel further from discontinuity are
+      given less weight:
+      - 'step' -- Kernel is step function with uniform left and right parts (-1 and 1 respectively).
+      - 'linear' -- Kernel value is linear function of relative offset.
+      - 'quadratic' -- Kernel value is quadratic function (square root) of relative offset.
+      - 'sine' -- Kernel value is proportional to shifted sine (cosine) of relative offset.
     
     ---
     
-    plot_activity_onset(step=None, percentile=20, N='6h', M='6h', bouts=False, 
+    plot_activity_onset(step=None, percentile=20, N='6h', M='6h', bouts=False, mode='step', 
                         filename=None, width=1000, height=600, dpi=96)
     
     Calculates and plots activity onset for each day.
     
     Arguments:
-    * step -- Step size for generating periods, if None instance default step will be used. None or string, integer, 
-      timedelta or any other type which can be converted to timedelta.
+    * step -- Bin size, if None instance default step will be used. None or string, integer, timedelta or any other type 
+      which can be converted to timedelta.
     * percentile -- Defines which percentile of daily non-zero activity will be considered as potential candidate for 
       activity onset. Integer.
-    * N -- Determines length of period of -1's in convolution kernel. String, integer, timedelta or any other type which 
-      can be converted to timedelta.
-    * M -- Determines length of period of 1's in convolution kernel. String, integer, timedelta or any other type which 
-      can be converted to timedelta.
+    * N -- Determines length of period of negative values (daytime, left part) in convolution kernel. String, integer, 
+      timedelta or any other type which can be converted to timedelta.
+    * M -- Determines length of period of positive values (nighttime, right part) in convolution kernel. String, integer, 
+      timedelta or any other type which can be converted to timedelta.
     * bouts -- Flag that indicates whether calculation will be based on activity events or activity bouts. Bool.
+    * mode -- Defines shape of convolution kernel. Every kernel has discontinuity where left and righ par connect (values
+      around discontinuity are -1 and 1 for left and right parts respectively). For kernels other than 'step' left part is
+      decreasing from 0 to -1 and right part is decreasing from 1 to 0, i.e. parts of kernel further from discontinuity are
+      given less weight:
+      - 'step' -- Kernel is step function with uniform left and right parts (-1 and 1 respectively).
+      - 'linear' -- Kernel value is linear function of relative offset.
+      - 'quadratic' -- Kernel value is quadratic function (square root) of relative offset.
+      - 'sine' -- Kernel value is proportional to shifted sine (cosine) of relative offset.
     * filename -- Name of the file to save plot to. If None plot will be displayed instead.
     * width -- Plot width in pixels.
     * height -- Plot height in pixels.
     * dpi -- Plot DPI.
     """
-
+    
+    
     # Time constants used in class methods
-    __t0 = pd.Timestamp(0).asm8
-    __zero = pd.Timedelta(0).asm8
-    __day = pd.Timedelta('1d').asm8
-    __hour = pd.Timedelta('1h').asm8
+    __t0 = np.datetime64(0, 'm')
+    __zero = np.timedelta64(0, 'm')
+    __minute = np.timedelta64(1, 'm')
+    __hour = np.timedelta64(60, 'm')
+    __day = np.timedelta64(60*24, 'm')
     
     
-    def __init__(self, timeseries, night=('18:00', '06:00'), step='5m', start=None, stop=None, descr='',
-                 max_gap='1m', min_duration='0m', *, min_count=2, activity_threshold=1):        
-        self.__activity = __class__.__select_dates(timeseries, start=start, stop=stop)
-        self.__adjust_start_stop(start=start, stop=stop)
-        self.step = step
-        self.step = self.__get_step(step)
-        self.__max_gap = max_gap
-        self.__min_duration = min_duration
-        self.__min_count = min_count
-        self.descr = descr
+    def __init__(self, timestamps, activity=None, night=None, step='1m', start=None, stop=None, descr='',
+                 max_gap='1m', min_duration='1m', min_activity=1, min_data_points=1):
+        
+        # Fill missing values and check for dimensions
+        if activity is None:
+            activity = np.ones(timestamps.size, dtype='int')
+        elif timestamps.size != activity.size:
+            raise ValueError(f"activity should have same size as timestamps")
+        if night is None:
+            night = np.ones(timestamps.size, dtype='bool')
+        elif timestamps.size != night.size:
+            raise ValueError(f"night should have same size as timestamps")
+        
+        # Check for valid step size
+        self.step = pd.Timedelta(step).asm8
+        if (self.step < self.__minute) or (self.step % self.__minute != self.__zero):
+            raise ValueError(f"step must be a whole number of minutes")
+        self.step = self.step.astype('<m8[m]')
+        if self.__day % self.step != self.__zero:
+            raise ValueError(f"day should be divisible by step size")
+        self.steps_per_day = self.__day // self.step # Steps Per Day
+        
+        # Handle start and stop positions
+        self.start = timestamps[0]
+        self.start -= (self.start - self.__t0) % self.__day
+        if start is not None:
+            self.start = max(self.start, pd.Timestamp(start).asm8.astype('<M8[D]'))
+        self.start = self.start.astype('<M8[m]')
+        self.stop = timestamps[-1]
+        # stop is exclusive
+        self.stop += (self.start - self.stop - self.step) % self.__day + self.step
+        if stop is not None:
+            self.stop = min(self.stop, pd.Timestamp(stop).asm8.astype('<M8[D]'))
+        self.stop = self.stop.astype('<M8[m]')
         self.total_days = (self.stop - self.start) // self.__day
-        self.mask = np.full(self.total_days, True, dtype='bool')
-        self.filter_inactive(activity_threshold=activity_threshold)
+        if self.total_days == 0:
+            raise RuntimeError(f"No data points inside specified time range")
         
-        def _seq_stat(seq):
-            """
-            Returns number of dimensions (nesting depth) and size (number of leaf elements) of a compound sequence.
-
-            Raises error if sequence nesting depth is inconsistent (i.e. at some depth exist both atominc and 
-            sequential elements).
-            """
-
-            def _is_atom(x):
-                return isinstance(x, str) or not isinstance(x, Sequence)
-
-            def _helper(seq, curr_depth, max_depth, size, final):
-                curr_depth += 1
-                if max_depth < curr_depth:
-                    if final:
-                        raise ValueError(f"sequence has inconsistent nesting")
-                    else:
-                        max_depth = curr_depth
-                atoms = None
-                for el in seq:
-                    if _is_atom(el):
-                        size += 1
-                        if atoms is False:
-                            raise ValueError(f"sequence has inconsistent nesting")
-                        if curr_depth < max_depth:
-                            raise ValueError(f"sequence has inconsistent nesting")
-                        atoms = True
-                        final = True
-                    else:
-                        if atoms is True:
-                            raise ValueError(f"sequence has inconsistent nesting")
-                        atoms = False
-                        max_depth, size, final = _helper(el, curr_depth, max_depth, size, final)
-                return max_depth, size, final
-
-            if seq is None:
-                return 0, 0
-            elif _is_atom(seq):
-                return 0, 1
+        # Discretize data so it will be alingned to regular (uniform) 1D grid.
+        # We need this step because input will have values only at points where activity > 0,
+        #   thus distance between 2 consecutive input data points will vary.
+        intervals = np.arange(self.start, self.stop + self.step, self.step)
+        self.__timestamps = intervals[:-1]
+        self.__activity, _ = np.histogram(timestamps, intervals, weights=activity)
+        
+        # Here and later day and night refers to lights on/off conditions while calendar day refers to 24-hour 
+        #   calendar day.
+        # Because input data points distributed inhomogenously, apparent night and day beggining/end will
+        #   vary from one calendar day to another even if day/night cycle is the same for each calendar day.
+        # To work around this issue and assign same day/night boundaries across several calendar days we will
+        #   assign negative values to points where night=False, positive values to points where night=True and
+        #   value of zero to points for which we have no data.
+        # Then we will align several calendar days to fill the gaps based on available data.
+        # Finally we will fill the remaining gaps by trying to align day/night boundaries to some "pretty" values.
+        # The algorithm also provide possibility for day/night boundaries that differ for different calendar days,
+        #   but will try to make them as uniform as possible.
+        #List of all 24-hour day/night patterns
+        patterns = []
+        # Number of calendar days that follow each day/night pattern, sum(pattern_days) = self.total_days
+        pattern_days = [0]
+        self.__night = np.zeros(self.steps_per_day * self.total_days, dtype='bool')
+        night_array, _ = np.histogram(timestamps[night], intervals)
+        night_array = night_array.astype('bool').reshape(self.total_days, self.steps_per_day)
+        day_array, _ = np.histogram(timestamps[~night], intervals)
+        day_array = day_array.astype('bool').reshape(self.total_days, self.steps_per_day)
+        # If at some step there are both night and day data points, keep only one
+        #night_array[day_array] = False # Option a)
+        day_array[night_array] = False # Option b)
+        # Current day and night patterns
+        day_pattern = np.zeros(self.steps_per_day, dtype='bool')
+        night_pattern = np.zeros(self.steps_per_day, dtype='bool')
+        # Loop through each calendar day and assign day/night values to current day/night pattern based on  
+        #   available data points for that calendar day.
+        # Positive pattern values correspont to night while negative pattern values correspont to day.
+        #   Zero values correspond to no available data and they will be filled during next stage.
+        # In case of conflicting day/night values create new day/night pattern.
+        for d in range(self.total_days):
+            # Check that night and day phases for current day are not overlapping with phases in current pattern
+            if np.any((day_pattern & night_array[d]) | (night_pattern & day_array[d])):
+                # If night/day phases overlap with current pattern, finalize pattern and start new one.
+                patterns.append(night_pattern.astype('int') - day_pattern.astype('int'))
+                pattern_days.append(1)
+                day_pattern = day_array[d].copy()
+                night_pattern = night_array[d].copy()
             else:
-                max_depth, size, _ = _helper(seq, 0, 0, 0, False)
-            return max_depth, size
-        
-        def _get_hour(t):
-            if isinstance(t, np.timedelta64):
-                return t % self.__day
-            if ':' not in t:
-                t = t + ':00'
-            if t == '24:00':
-                return self.__day
-            else:
-                return ((pd.Timestamp(t).asm8 - self.__t0) % self.__day)
-        
-        ndim, size = _seq_stat(night)
-        if size % 2 != 0 or ndim > 2 or (ndim == 2 and (len(night) != self.total_days)):
-            print(size, len(night), self.total_days)
-            raise ValueError(f"night should be list/tuple with even number of elements "
-                             f"that specifies start and end of night periods for all days or "
-                             f"sequence of such lists/tuples for each day")
-        if size == 0:
-            night_pos = np.empty((0, 2), dtype='<m8[ns]')
-            self.night = [night_pos] * self.total_days
-        elif ndim == 1:
-            night_pos = [_get_hour(t) for t in night]
-            last = self.__zero
-            for i in range(0, len(night_pos) - 2, 2):
-                if night_pos[i+1] < night_pos[i] or night_pos[i] < last:
-                    raise ValueError(f"overlapping night intervals")
-                last = night_pos[i+1]
-            if night_pos[-2] < last:
-                raise ValueError(f"overlapping night intervals")
-            if night_pos[-1] == self.__zero:
-                night_pos[-1] = self.__day
-            if night_pos[-1] < night_pos[-2]:
-                if night_pos[1] < night_pos[-1]:
-                    raise ValueError(f"overlapping night intervals")
-                else:
-                    night_pos = [self.__zero] + [night_pos[-1]] + night_pos[:-1] + [self.__day]
-            night_pos = np.array(night_pos).reshape(-1, 2)
-            self.night = [night_pos] * self.total_days
+                # If day/night phases don't overlap, update current day and night patterns and last pattern_days
+                day_pattern |= day_array[d]
+                night_pattern |= night_array[d]
+                pattern_days[-1] += 1
         else:
-            self.night = [None] * self.total_days
-            night_pos = [[_get_hour(t) for t in d] for d in night]
-            night_pos.append([])
-            odd = False
-            for d in range(self.total_days):
-                n = len(night_pos[d])
-                if n == 0:
-                    self.night[d] = np.empty((0, 2), dtype='<m8[ns]')
-                    continue
-                if n >= 2:
-                    if night_pos[d][-1] < night_pos[d][-2]:
-                        night_pos[d+1] = [night_pos[d][-1]] + night_pos[d+1]
-                        night_pos[d] = night_pos[d][:-1]
-                        n -= 1
-                last = self.__zero
-                for i in range(0, n - 1, 2):
-                    if night_pos[d][i+1] < night_pos[d][i] or night_pos[d][i] < last:
-                        raise ValueError(f"overlapping night intervals")
-                    last = night_pos[d][i+1]
-                if night_pos[d][-1] == self.__zero:
-                        night_pos[d][-1] = self.__day
-                if n%2 != 0:
-                    if odd:
-                        night_pos[d] = [self.__zero] + night_pos[d]
-                        odd = False
-                    else:
-                        night_pos[d] = night_pos[d] + [self.__day]
-                        odd = True
+            # Append last day/night pattern
+            patterns.append(night_pattern.astype('int') - day_pattern.astype('int'))
+        # Fill unassigned values in patterns and determine day/night boundaries
+        # "Pretty" time values (in minutes) that will be favoured for day/night boundaries.
+        pretty_numbers = [60, 30, 15, 10, 5]
+        pretty_numbers = [n // self.step.astype('int') for n in pretty_numbers if n % self.step.astype('int') == 0]
+        # Alignment to the one step is always valid
+        if not pretty_numbers or pretty_numbers[-1] != 1:
+            pretty_numbers.append(1)
+        start_offset = ((self.start - self.__t0) % self.__day) // self.step
+        pattern_start = 0
+        boundaries = np.zeros(self.steps_per_day, dtype='int')
+        nighttime = np.zeros(self.steps_per_day, dtype='int')
+        for pattern, ndays in zip(patterns, pattern_days):
+            start_idx = 0
+            last_idx = 0
+            last_val = 0
+            for i in np.nonzero(pattern)[0]:
+                if pattern[i] == -last_val:
+                    # Try to align boundaries to "pretty" values
+                    for n in pretty_numbers:
+                        if i - (i + start_offset) % n > last_idx - 1:
+                            last_idx = i - (i + start_offset) % n
+                            break
+                    pattern[start_idx : last_idx] = last_val
+                    start_idx = last_idx
+                    last_idx = i + 1
+                    last_val = pattern[i]
                 else:
-                    if odd:
-                        night_pos[d] = [self.__zero] + night_pos[d] + [self.__day]
-                self.night[d] = np.array(night_pos[d]).reshape(-1, 2)
+                    last_val = pattern[i]
+                    last_idx = i + 1
+            else:
+                pattern[start_idx : ] = last_val
+            self.__night[pattern_start * self.steps_per_day : 
+                         (pattern_start + ndays) * self.steps_per_day] = np.tile(pattern > 0, ndays)
+            pattern_start += ndays
+            # We are interested only in night -> day borders, that's why less-than-zero condition
+            boundaries += (np.diff(pattern, prepend=pattern[-1]) < 0) * ndays
+            nighttime += (pattern > 0)*ndays
+        boundary_idx = np.nonzero(boundaries)[0]
+        if boundary_idx.size > 0:
+            # This sorting order prioritizes daytime over presense of night/day borders at the start of each day 
+            boundary_idx = boundary_idx[np.lexsort((-boundaries[boundary_idx], nighttime[boundary_idx]))][0]
+            # This sorting order prioritizes presense of night/day borders over daytime at the start of each day
+            #boundary_idx = boundary_idx[np.lexsort((nighttime[boundary_idx], -boundaries[boundary_idx]))][0]
+        else:
+            boundary_idx = 0
+        # Adjust start and stop
+        self.start += boundary_idx * self.step
+        self.stop += boundary_idx * self.step
+        start_idx = boundary_idx
+        stop_idx = start_idx + self.total_days * self.steps_per_day
+        # Extend data by 1 day because the shift in start position
+        if start_idx > 0:
+            self.__timestamps = np.append(self.__timestamps, 
+                                          np.arange(self.__day, step=self.step) 
+                                          + self.__timestamps[-1] + self.step)[start_idx : stop_idx]
+            self.__activity = np.append(self.__activity, 
+                                        np.zeros(self.steps_per_day, dtype='int'))[start_idx : stop_idx]
+            self.__night = np.append(self.__night, 
+                                     self.__night[-self.steps_per_day : ])[start_idx : stop_idx]
+        
+        # Mask out datapoints for inactive days
+        self.daily_mask = np.ones(self.total_days, dtype='bool')
+        self.__mask = np.ones_like(self.__timestamps, dtype='bool')
+        self.days = self.total_days
+        self.min_data_points = min_data_points
+        self.filter_inactive(min_data_points=min_data_points)
+        
+        # Calculate bouts
+        self.update_bouts(max_gap, min_duration, min_activity)
+        
+        self.descr = descr
+        
     
+    @property
+    def timestamps(self):
+        return self.__timestamps[self.__mask]
     
     @property
     def activity(self):
-        res = []
-        for b in self.day_indices:
-            res.append(__class__.__select_dates(self.__activity, 
-                                              start=(self.start + b[0] * self.__day), 
-                                              stop=(self.start + b[1] * self.__day)))
-        return np.hstack(res)
+        return self.__activity[self.__mask]
+    
+    @property
+    def night(self):
+        return self.__night[self.__mask]
+    
+    @property
+    def bouts(self):
+        return self.__bouts[self.__mask]
     
     
     def __get_step(self, step=None):
         if step is None:
             step = self.step
-        return pd.Timedelta(step).asm8
-    
-    
-    def __get_step_spd(self, step=None):
-        step = self.__get_step(step)
+        else:
+            step = pd.Timedelta(step).asm8.astype('<m8[m]')
         if self.__day % step:
             raise ValueError(f"there should be whole number of steps in 1 day")
         steps_per_day = self.__day // step
         if steps_per_day == 0:
             raise ValueError(f"step can't be larger that 1 day")
         return step, steps_per_day
-
-    @staticmethod
-    def __select_dates(timeseries, start=None, stop=None):
-        if start is None and stop is None:
-            return timeseries
-        if start is None:
-            start = pd.Timestamp.min.asm8
-        else:
-            start = pd.Timestamp(start).asm8
-        if stop is None:
-            stop = pd.Timestamp.max.asm8
-        else:
-            stop = pd.Timestamp(stop).asm8
-        if timeseries.ndim == 1:
-            if timeseries.size > 0:
-                indexes = np.argwhere((timeseries >= start) & (timeseries < stop)).ravel()
-            else:
-                indexes = np.array([], dtype='i8')
-            return timeseries[indexes]
-        elif timeseries.ndim == 2 and timeseries.shape[1] == 2:
-            if timeseries.size > 0:
-                indexes = np.argwhere((timeseries[:, 1] >= start) & (timeseries[:, 0] < stop)).ravel()
-            else:
-                indexes = np.empty((0, 2), dtype='i8')
-            result = timeseries[indexes]
-            if result.size:
-                result[0, 0] = np.maximum(result[0, 0], start)
-                result[-1, 1] = np.minimum(result[-1, 1], stop - 1)
-            return result
-        else:
-            raise ValueError(f"first argument should be 1-D array of consecutive timestamps (represents" 
-                             " event times), or 2-D array of consecutive timestamps with shape (N, 2)"
-                             " (represents non-overlapping time intervals)")
     
     
-    def select_dates(self, start=None, stop=None, bouts=False):
+    def __discretize(self, weights, step):
+        step, steps_per_day = self.__get_step(step)
+        result, intervals = np.histogram(self.timestamps,
+                                         np.arange(self.start, self.stop + step, step, dtype='<M8[m]'),
+                                         weights=weights)
+        mask = np.repeat(self.daily_mask, steps_per_day)
+        return (result[mask], intervals[:-1][mask])
+    
+    
+    def __activity_bouts(self, max_gap=None, min_duration=None, min_activity=None):
+        if max_gap is None:
+            max_gap = self.max_gap
+        else:
+            max_gap = pd.Timedelta(max_gap).asm8.astype('<m8[m]')
+            if max_gap % self.step != self.__zero:
+                raise ValueError(f"max_gap should be multiple of discretization step ({self.step})")
+        if min_duration is None:
+            min_duration = self.min_duration
+        else:
+            min_duration = pd.Timedelta(min_duration).asm8.astype('<m8[m]')
+            if min_duration % self.step != self.__zero:
+                raise ValueError(f"min_duration should be multiple of discretization step ({self.step})")
+        if min_activity is None:
+            min_activity = self.min_activity
+        max_gap = max_gap // self.step
+        min_duration = min_duration // self.step
+        bouts = np.zeros_like(self.__activity, dtype='bool')
+        indexes = np.nonzero(self.__activity >= min_activity)[0]
+        bout_starts = indexes[(np.diff(indexes, prepend=indexes[0] - max_gap - 1) > max_gap).nonzero()[0]]
+        bout_ends = indexes[(np.diff(indexes, append=indexes[0] + max_gap + 1) > max_gap).nonzero()[0]] + 1
+        for s, e in zip(bout_starts, bout_ends):
+            if e - s >= min_duration:
+                bouts[s:e] = True
+        return bouts.astype('int')
+    
+    
+    def activity_bouts(self, max_gap=None, min_duration=None, min_activity=None):
+        return self.__activity_bouts(max_gap, min_duration, min_activity)[self.__mask]
+    
+    
+    def update_bouts(self, max_gap=None, min_duration=None, min_activity=None):
+        if max_gap:
+            max_gap = pd.Timedelta(max_gap).asm8.astype('<m8[m]')
+            if max_gap % self.step != self.__zero:
+                raise ValueError(f"max_gap should be multiple of discretization step ({self.step})")
+            self.max_gap = max_gap
+        else:
+            max_gap = self.max_gap
+        if min_duration:
+            min_duration = pd.Timedelta(min_duration).asm8.astype('<m8[m]')
+            if min_duration % self.step != self.__zero:
+                raise ValueError(f"min_duration should be multiple of discretization step ({self.step})")
+            self.min_duration = min_duration
+        else:
+            min_duration = self.min_duration
+        if min_activity:
+            if min_activity <= 0:
+                raise ValueError(f"min_activity should be positive")
+            self.min_activity = min_activity
+        else:
+            min_activity = self.min_activity
+        self.__bouts = self.__activity_bouts(max_gap, min_duration, min_activity)
+    
+    
+    def filter_inactive(self, min_data_points=1):
+        """Filters out days for which number of data points < min_data_points."""
+        self.daily_mask[:] = False
+        self.__mask[:] = False
+        events, _ = np.histogram(self.__timestamps[self.__activity > 0], 
+                                 np.arange(self.start, self.stop + self.__day, self.__day))
+        self.daily_mask = (events >= min_data_points)
+        self.days = self.daily_mask.sum()
+        self.__mask = np.repeat(self.daily_mask, self.steps_per_day)
+    
+    
+    def plot_actogram(self, step=None, bouts=False, activity_onset='none', percentile=20, N='6h', M='6h',
+                      filename=None, width=1000, height=100, dpi=96):
+        if filename is not None:
+            filename = Path(filename)
+        step, steps_per_day = self.__get_step(step)
+        bar_color = '#000000'
+        night_color = '#808080'
+        onset_color = '#cc0000'
         if bouts:
-            return __class__.__select_dates(self.bouts, start, stop)
+            values, timestamps = self.__discretize(self.bouts.astype('float32'), step)
         else:
-            return __class__.__select_dates(self.activity, start, stop)
-    
-    
-    def __adjust_start_stop(self, start=None, stop=None):
-        """Adjusts start and stop timestamps so that there is whole number of periods between them."""
-        if start is None:
-            start = self.__activity[0] - (self.__activity[0] - self.__t0) % self.__day
-        else:
-            start = pd.Timestamp(start).asm8
-        if stop is None:
-            stop = self.__activity[-1]
-            stop = stop - (stop - start) % self.__day + self.__day
-        else:
-            stop = pd.Timestamp(stop).asm8
-            stop = stop - (stop - start - 1) % self.__day + self.__day - 1
-        self.start = start
-        self.stop = stop
-    
-    
-    def filter_inactive(self, activity_threshold=1):
-        """Filters out days where activity < activity_threshold."""
-        self.mask[:] = True
-        for i in range(self.mask.size):
-            events = __class__.__select_dates(self.__activity, 
-                                            self.start + i*self.__day,
-                                            self.start + (i + 1)*self.__day)
-            if events.size < activity_threshold:
-                self.mask[i] = False
-        tmp = np.where(np.roll(np.append(self.mask, -1), 1) != np.append(self.mask, -1))[0]
-        self.day_indices = tmp[0 if self.mask[0] else 1 : None if self.mask[-1] else -1].reshape(-1, 2)
-        self.days = self.mask.sum()
-        self.adjust_bouts(self.__max_gap, self.__min_duration, self.__min_count)
-        self.activity_threshold = activity_threshold
-    
-    
-    def activity_bouts(self, max_gap='1m', min_duration='0m', min_count=2):
-        max_gap = pd.Timedelta(max_gap).asm8
-        min_duration = pd.Timedelta(min_duration).asm8
-        bout_starts = np.nonzero(np.diff(self.activity, 
-                                         prepend=(self.activity[0] - max_gap - 1)) > max_gap)[0]
-        bout_ends = np.nonzero(np.diff(self.activity, 
-                                       append=(self.activity[-1] + max_gap + 1)) > max_gap)[0]
-        keep_indexes = np.nonzero((bout_ends - bout_starts >= min_count) & 
-                                  (self.activity[bout_ends] - self.activity[bout_starts] >= min_duration))
-        indexes = np.vstack((bout_starts[keep_indexes], bout_ends[keep_indexes])).T
-        return self.activity[indexes]
+            values, timestamps = self.__discretize(self.activity, step)
         
-    
-    def adjust_bouts(self, max_gap='1m', min_duration='0m', min_count=2):
-        self.__max_gap = max_gap
-        self.__min_duration = min_duration
-        self.__min_count = min_count
-        self.bouts = self.activity_bouts(max_gap, min_duration, min_count)
-    
-    
-    def discretize(self, step=None, bouts=False):
-        step, steps_per_day = self.__get_step_spd(step)
-        if not bouts:
-            intervals = np.arange(self.start, self.stop + step, step)
-            result, _ = np.histogram(self.activity, intervals)
+        values = values.reshape(self.days, steps_per_day)
+        night, _ = self.__discretize(self.night.astype('int'), step)
+        night = (night>0).astype('int').reshape(self.days, steps_per_day)
+        fig, subplots = plt.subplots(self.days, 2, sharex=True, sharey=True,
+                                     figsize=(width/dpi, height*self.days/dpi), dpi=dpi,
+                                     gridspec_kw={'hspace': 0, 'wspace': 0})
+        minute_offset = (self.start - self.__t0) % self.__hour
+        if not minute_offset:
+            first_tick = self.start
+            tick_start = 0.0
         else:
-            intervals = np.arange(self.start, self.stop + step, step)
-            result = np.zeros(len(intervals) - 1, dtype='d')
-            for i, b in zip(count(), np.digitize(self.bouts.astype('i8'), intervals.astype('i8')) - 1):
-                if b[0] < len(result):
-                    result[b[0]:(b[1]+1)] += 1.0
-                    result[b[0]] -= (self.bouts[i, 0] - intervals[b[0]]) / step
-                if b[1] < len(result):
-                    result[b[1]] -= (intervals[b[1]+1] - self.bouts[i, 1]) / step
-        return (intervals[:-1][np.repeat(self.mask, steps_per_day)], 
-                result[np.repeat(self.mask, steps_per_day)])
-    
-    
-    
+            first_tick = self.start - minute_offset + self.__hour
+            tick_start = (self.__hour - minute_offset) / self.__day
+        hours_per_tick = 2
+        tick_pos = np.arange(tick_start, 1 + tick_start, hours_per_tick/24) * steps_per_day
+        tick_labels = []
+        for i in range(len(tick_pos)):
+            tick_label = pd.Timestamp(first_tick + i*hours_per_tick*self.__hour).strftime('%H')
+            tick_labels.append(tick_label)
+        fig.subplots_adjust(top=1-0.5/(self.days+1))
+        fig.text(0.5, 1 - 0.25/(self.days + 1), f"Actogram {self.descr}", ha='center', fontsize=20, wrap=False)
+        if activity_onset != 'none':
+            onset = self.activity_onset(step, percentile, N, M, bouts, activity_onset)
+            onset = ((onset - timestamps[0]) % self.__day) / self.__day * steps_per_day
+        last_d = -1
+        for i in range(1, 2*self.days):
+            d = i // 2
+            if d != last_d:
+                night_pos = timestamps[np.nonzero(np.diff(night[d], 
+                                                          prepend=False, append=False))[0]].reshape(-1, 2)
+                night_pos = ((night_pos - timestamps[0]) / self.__day) * steps_per_day
+            last_d = d
+            ax = subplots[d - (i+1)%2, (i+1) % 2]
+            ax.bar(np.arange(steps_per_day), values[d], 
+                   width=1, align='edge', color=bar_color)
+            for j in range(len(night_pos)):
+                ax.axvspan(night_pos[j, 0], night_pos[j, 1], color=night_color, alpha=0.5)
+            if not i%2:
+                ax.yaxis.set_label_position('right')
+            if activity_onset != 'none':
+                ax.axvline(onset[d], color=onset_color)
+            ax.set_yticks([])
+            ax.set_ylabel(f"{pd.Timestamp(timestamps[d*steps_per_day]).strftime('%Y-%m-%d')}", 
+                          rotation=0, fontsize=8, labelpad=40, va='center')
+        plt.xticks(ticks=tick_pos, labels=tick_labels)
+        plt.xlim([0, steps_per_day])
+        if filename:
+            plt.close(fig)
+            fig.savefig(filename, dpi=dpi)
+            print(f"File succesfully saved to {filename}")
+        else:
+            plt.show()
     
     
     def periodogram(self, step=None, min_period='16h', max_period='32h', bouts=False):
-        step = self.__get_step(step)
-        min_period = pd.Timedelta(min_period).asm8
-        max_period = pd.Timedelta(max_period).asm8
+        step, _ = self.__get_step(step)
+        min_period = pd.Timedelta(min_period).asm8.astype('<m8[m]')
+        max_period = pd.Timedelta(max_period).asm8.astype('<m8[m]')
         if min_period % step + max_period % step != self.__zero:
                 raise ValueError(f"min_period and max_period should be divisible "
                                  f"by step ({pd.Timedelta(step)})")
-        timestamps, values = self.discretize(step, bouts=bouts)
+        if bouts:
+            values, _ = self.__discretize(self.bouts, step)
+        else:
+            values, _ = self.__discretize(self.activity, step)
         # Pad zeros to not lose values at the end of data
         values = np.pad(values, (0, max_period//step - 1))
         n = values.size
@@ -998,34 +1058,36 @@ class CycleAnalyzer():
             k = n//p
             tmp = values[:k*p].reshape((k, p))
             result[i] = k*p*tmp.mean(axis=0).var() / tmp.var()
-        periods = np.arange(min_period, max_period + step, step, dtype='<m8')
+        periods = np.arange(min_period, max_period + step, step, dtype='<m8[m]')
         return periods, result
     
     
     def plot_periodogram(self, step=None, min_period='16h', max_period='32h', bouts=False,
                          filename=None, width=1000, height=600, dpi=96):
         periods, values = self.periodogram(step, min_period, max_period, bouts)
+        periods = periods.astype('int')
+        hour = self.__hour.astype('int')
         graph_color = '#000000'
         if filename is not None:
             filename = Path(filename)
         fig = plt.figure(figsize=(width/dpi, height/dpi))
         n = periods.size
-        offset = periods[0] % self.__hour
+        offset = periods[0] % hour
         if not offset:
             start = periods[0]
         else:
-            start = periods[0] - offset + self.__hour
-        tick_pos = np.arange(start, periods[-1] + self.__hour - offset, self.__hour)
+            start = periods[0] - offset + hour
+        tick_pos = np.arange(start, periods[-1] + hour - offset, hour)
         tick_labels = []
         for tick in tick_pos:
-            tick_labels.append(str(tick//self.__hour))
-        plt.xticks(ticks=tick_pos.astype('i8'), labels=tick_labels)
+            tick_labels.append(str(tick//hour))
+        plt.xticks(ticks=tick_pos.astype('int'), labels=tick_labels)
         plt.xlim([periods[0], periods[-1]])
 
         plt.plot(periods, values, color=graph_color)
         fig.text(0.5, 0.95, f"Periodogram {self.descr}", ha='center', fontsize=20, wrap=False)
         fig.text(0.5, 0.0, f"Maximal power at period "
-                           f"{pd.Timedelta(periods[values.argmax()]) / self.__hour :.2f} hours",
+                           f"{periods[values.argmax()] / hour :.2f} hours",
                  ha='center', fontsize=20, wrap=False)
         if filename:
             plt.close(fig)
@@ -1037,42 +1099,15 @@ class CycleAnalyzer():
     
     def light_activity(self, bouts=False):
         result = np.zeros(self.total_days)
-        total_night_activity = 0
-        total_activity = 0
-        mean_night_activity = 0
-        if not bouts:
-            for i in range(self.total_days):
-                if self.mask[i]:
-                    night_pos = self.night[i]
-                    timestamps = self.select_dates(self.start + i*self.__day, self.start + (i + 1)*self.__day)
-                    dayly_activity = timestamps.size
-                    timestamps = ((timestamps - self.__t0) % self.__day).reshape(1, -1)
-                    dayly_night_activity = ((timestamps >= night_pos[:, 0].reshape(-1, 1)) & 
-                                            (timestamps < night_pos[:, 1].reshape(-1, 1))).max(axis=0).sum()
-                    total_night_activity += dayly_night_activity
-                    total_activity += dayly_activity
-                    if dayly_activity:
-                        result[i] = 1 - dayly_night_activity / dayly_activity
+        if bouts:
+            day_activity, _ = self.__discretize(self.bouts.astype('int') * ~self.night, self.__day)
+            all_activity, _ = self.__discretize(self.bouts.astype('int'), self.__day)
         else:
-            for i in range(self.total_days):
-                if self.mask[i]:
-                    night_pos = np.expand_dims(self.night[i], -1)
-                    timestamps = self.select_dates(self.start + i*self.__day, 
-                                                   self.start + (i + 1)*self.__day, 
-                                                   bouts=True)
-                    timestamps = np.expand_dims((timestamps - self.__t0) % self.__day, 0)
-                    dayly_night_activity = np.maximum(np.minimum(timestamps[:, :, 1], night_pos[:, 1]) - 
-                                                      np.maximum(timestamps[:, :, 0], night_pos[:, 0]), 
-                                                      self.__zero).sum()
-                    dayly_activity = (timestamps[:, :, 1] - timestamps[:, :, 0]).sum()
-                    total_night_activity += dayly_night_activity
-                    total_activity += dayly_activity
-                    if dayly_activity:
-                        result[i] = 1 - dayly_night_activity / dayly_activity
-
-        if total_activity:
-            mean_night_activity = 1 - total_night_activity / total_activity
-        return result[self.mask], mean_night_activity
+            day_activity, _ = self.__discretize(self.activity * ~self.night, self.__day)
+            all_activity, _ = self.__discretize(self.activity, self.__day)
+        result = day_activity / all_activity
+        mean_result = day_activity.sum() / all_activity.sum()
+        return result, mean_result
     
     
     def plot_light_activity(self, bouts=False, filename=None, width=1000, height=600, dpi=96):
@@ -1083,14 +1118,14 @@ class CycleAnalyzer():
         if filename is not None:
             filename = Path(filename)
         fig = plt.figure(figsize=(width/dpi, height/dpi))
-        plt.ylim(0, 1)
+        #plt.ylim(0, 1)
         tick_step = self.days // (max_ticks - 1) + 1
         tick_mask = np.full(self.days, False, dtype='bool')
         for i in range(0, self.days, tick_step):
             tick_mask[i] = True
         tick_mask[-1] = True
         tick_pos = np.arange(self.days)[tick_mask]
-        tick_labels = np.arange(self.start, self.stop, self.__day)[self.mask][tick_mask].astype('datetime64[D]')
+        tick_labels = np.arange(self.start, self.stop, self.__day)[self.daily_mask][tick_mask].astype('datetime64[D]')
         plt.xticks(tick_pos, tick_labels, rotation=90)
         plt.plot(values, color=graph_color)
         plt.axhline(total, color=total_color)
@@ -1103,32 +1138,40 @@ class CycleAnalyzer():
             plt.show()
     
     
-    def interdaily_stability(self, step=None, bouts=False):
-        step, steps_per_day = self.__get_step_spd(step)
-        timestamps, values = self.discretize(step, bouts=bouts)
-        tmp = values.reshape((self.days, steps_per_day))
+    def interdaily_stability(self, step='1h', bouts=False):
+        step, steps_per_day = self.__get_step(step)
+        if bouts:
+            values, _ = self.__discretize(self.bouts, step)
+        else:
+            values, _ = self.__discretize(self.activity, step)
+        values = values.reshape(self.days, steps_per_day)
         result = 0.0
-        var = tmp.var()
+        var = values.var()
         if var and not np.isnan(var):
-            result = tmp.mean(axis=0).var() / var
+            result = values.mean(axis=0).var() / var
         return result
     
     
-    def intradaily_variability(self, step=None, bouts=False):
-        step, steps_per_day = self.__get_step_spd(step)
-        timestamps, values = self.discretize(step, bouts=bouts)
+    def intradaily_variability(self, step='1h', bouts=False):
+        step, steps_per_day = self.__get_step(step)
+        if bouts:
+            values, _ = self.__discretize(self.bouts, step)
+        else:
+            values, _ = self.__discretize(self.activity, step)
+        values = values.reshape(self.days, steps_per_day)
         result = np.zeros(self.days)
-        for i in range(self.days):
-            tmp = values[i*steps_per_day:(i+1)*steps_per_day]
-            if tmp.var():
-                result[i] = (np.diff(tmp) ** 2).sum() / tmp.var() / (steps_per_day - 1)
+        tmp = (np.diff(values, axis=-1) ** 2).mean(axis=-1)
+        var = values.reshape(self.days, steps_per_day).var(axis=-1)
+        mask = (var > 0) & ~np.isnan(var)
+        result[mask] = tmp[mask] / var[mask]
         total = 0.0
         var = values.var()
         if var and not np.isnan(var):
-            total = (np.diff(values) ** 2).sum() / var / (values.size - 1)
+            total = (np.diff(values) ** 2).mean() / var
         return result, total
     
-    def plot_intradaily_variability(self, step=None, bouts=False,
+    
+    def plot_intradaily_variability(self, step='1h', bouts=False,
                                     filename=None, width=1000, height=600, dpi=96):
         values, total = self.intradaily_variability(step, bouts)
         graph_color = '#000000'
@@ -1143,9 +1186,9 @@ class CycleAnalyzer():
             tick_mask[i] = True
         tick_mask[-1] = True
         tick_pos = np.arange(self.days)[tick_mask]
-        tick_labels = np.arange(self.start, self.stop, self.__day)[self.mask][tick_mask].astype('datetime64[D]')
+        tick_labels = np.arange(self.start, self.stop, self.__day)[self.daily_mask][tick_mask].astype('datetime64[D]')
         plt.xticks(tick_pos, tick_labels, rotation=90)
-        plt.ylim(0, max(total, values.max())*1.05)
+        #plt.ylim(0, max(total, values.max())*1.05)
         plt.plot(values, color=graph_color)
         plt.axhline(total, color=total_color)
         fig.text(0.5, 0.95, f"Intradaily Variability {self.descr}", ha='center', fontsize=20, wrap=False)
@@ -1155,14 +1198,13 @@ class CycleAnalyzer():
             print(f"File succesfully saved to {filename}")
         else:
             plt.show()
-            
     
-    def relative_amplitude(self, step=None, most_active='10h', least_active='5h', bouts=False):
+    
+    def relative_amplitude(self, most_active='10h', least_active='5h', bouts=False):
 
         def window1d(a, width, step=1):
             return a[np.arange(0, width, step)[None, :] + np.arange(0, a.size-width+1, step)[:, None]]
 
-        step, steps_per_day = self.__get_step_spd(step)
         most_active = pd.Timedelta(most_active).asm8
         least_active = pd.Timedelta(least_active).asm8
         if most_active + least_active + min(most_active, least_active) > self.__day:
@@ -1172,19 +1214,22 @@ class CycleAnalyzer():
             raise ValueError(f"most_active should be > 0")
         if least_active <= self.__zero:
             raise ValueError(f"least_active should be > 0")
-        if most_active % step != self.__zero:
-            raise ValueError(f"most_active should be divisible by step ({pd.Timedelta(step)})")
-        if least_active % step != self.__zero:
-            raise ValueError(f"least_active should be divisible by step ({pd.Timedelta(step)})")
-        timestamps, values = self.discretize(step, bouts=bouts)
-        most_active_steps = most_active // step
-        least_active_steps = least_active // step
+        if most_active % self.step != self.__zero:
+            raise ValueError(f"most_active should be divisible by instance step ({pd.Timedelta(self.step)})")
+        if least_active % self.step != self.__zero:
+            raise ValueError(f"least_active should be divisible by instance step ({pd.Timedelta(self.step)})")
+        if bouts:
+            values = self.bouts
+        else:
+            values = self.activity
+        most_active_steps = most_active // self.step
+        least_active_steps = least_active // self.step
         result = np.zeros(self.days)
         total_most_active = 0
         total_least_active = 0
         for i in range(self.days):
-            start = i*steps_per_day
-            stop = (i+1)*steps_per_day
+            start = i * self.steps_per_day
+            stop = (i+1) * self.steps_per_day
             most_active_w = window1d(values[start : stop], most_active_steps).mean(-1)
             most_active_idx = most_active_w.argmax()
             most_active_val = most_active_w[most_active_idx]
@@ -1195,7 +1240,7 @@ class CycleAnalyzer():
                                           least_active_steps).mean(-1)
                 least_active_idx = least_active_w.argmin()
                 least_active_val_1 = least_active_w[least_active_idx]
-            if most_active_idx + most_active_steps + least_active_steps <= steps_per_day:
+            if most_active_idx + most_active_steps + least_active_steps <= self.steps_per_day:
                 least_active_w = window1d(values[start + most_active_idx + most_active_steps : stop], 
                                           least_active_steps).mean(-1)
                 least_active_idx = least_active_w.argmin()
@@ -1212,7 +1257,7 @@ class CycleAnalyzer():
                                              most_active_steps).mean(-1)
                     most_active_idx = most_active_w.argmax()
                     most_active_val_1 = most_active_w[most_active_idx]
-                if least_active_idx + least_active_steps + most_active_steps <= steps_per_day:
+                if least_active_idx + least_active_steps + most_active_steps <= self.steps_per_day:
                     most_active_w = window1d(values[start + least_active_idx + least_active_steps : stop], 
                                              most_active_steps).mean(-1)
                     most_active_idx = most_active_w.argmax()
@@ -1228,9 +1273,9 @@ class CycleAnalyzer():
         return result, total
     
     
-    def plot_relative_amplitude(self, step=None, most_active='10h', least_active='5h', bouts=False,
+    def plot_relative_amplitude(self, most_active='10h', least_active='5h', bouts=False,
                                 filename=None, width=1000, height=600, dpi=96):
-        values, total = self.relative_amplitude(step, most_active, least_active, bouts)
+        values, total = self.relative_amplitude(most_active, least_active, bouts)
         graph_color = '#000000'
         total_color = '#808080'
         max_ticks = 20
@@ -1243,10 +1288,10 @@ class CycleAnalyzer():
             tick_mask[i] = True
         tick_mask[-1] = True
         tick_pos = np.arange(self.days)[tick_mask]
-        tick_labels = np.arange(self.start, self.stop, self.__day)[self.mask][tick_mask].astype('datetime64[D]')
+        tick_labels = np.arange(self.start, self.stop, self.__day)[self.daily_mask][tick_mask].astype('datetime64[D]')
         plt.xticks(tick_pos, tick_labels, rotation=90)
-        plt.ylim(0, 1)
-        plt.bar(np.arange(self.days), values, color=graph_color)
+        #plt.ylim(0, 1)
+        plt.plot(np.arange(self.days), values, color=graph_color)
         plt.axhline(total, color=total_color)
         fig.text(0.5, 0.95, f"Relative Amplitude {self.descr}", ha='center', fontsize=20, wrap=False)
         if filename:
@@ -1257,33 +1302,19 @@ class CycleAnalyzer():
             plt.show()
     
     
-    def daily_bouts(self, max_gap=None, min_duration=None, min_count=None, timescale='1s'):
-        if max_gap is None:
-            max_gap = self.__max_gap
-        if min_duration is None:
-            min_duration = self.__min_duration
-        if min_count is None:
-            min_count = self.__min_count
-        timescale = pd.Timedelta(timescale).asm8
-        bout_counts = np.zeros(self.total_days, dtype='i8')
-        bout_durations = np.zeros(self.total_days, dtype='float64')
-        timeseries = self.activity_bouts(max_gap, min_duration, min_count)
-        for i in range(self.total_days):
-            if self.mask[i]:
-                timestamps = __class__.__select_dates(timeseries,
-                                                      start=(self.start + i*self.__day), 
-                                                      stop=(self.start + (i + 1)*self.__day))
-                n_bouts = len(timestamps)
-                bout_counts[i] = n_bouts
-                if n_bouts:
-                    bout_duration = (timestamps[:, 1] - timestamps[:, 0]).sum()/timescale
-                    bout_durations[i] = bout_duration / n_bouts # Mean bout duration
-        return bout_counts[self.mask], bout_durations[self.mask]
+    def daily_bouts(self, max_gap=None, min_duration=None, min_activity=None):
+        bouts = self.activity_bouts(max_gap, min_duration, min_activity).reshape(self.days, 
+                                                                              self.steps_per_day).astype('int')
+        bout_counts = (np.diff(bouts, prepend=0, append=0, axis=-1) > 0).sum(axis=-1)
+        bout_durations = np.zeros(self.days, dtype='float')
+        mask = (bout_counts > 0)
+        bout_durations[mask] = self.step.astype('int') * bouts.sum(axis=-1)[mask] / bout_counts[mask]
+        return bout_counts, bout_durations
     
     
-    def plot_daily_bouts(self, max_gap=None, min_duration=None, min_count=None, timescale='1s',
+    def plot_daily_bouts(self, max_gap=None, min_duration=None, min_activity=None,
                          filename=None, width=1000, height=600, dpi=96):
-        bout_counts, bout_durations = self.daily_bouts(max_gap, min_duration, min_count, timescale)
+        bout_counts, bout_durations = self.daily_bouts(max_gap, min_duration, min_activity)
         graph_color = '#000000'
         bar_color = '#808080'
         max_ticks = 20
@@ -1296,7 +1327,7 @@ class CycleAnalyzer():
             tick_mask[i] = True
         tick_mask[-1] = True
         tick_pos = np.arange(self.days)[tick_mask]
-        tick_labels = np.arange(self.start, self.stop, self.__day)[self.mask][tick_mask].astype('datetime64[D]')
+        tick_labels = np.arange(self.start, self.stop, self.__day)[self.daily_mask][tick_mask].astype('datetime64[D]')
         plt.xticks(tick_pos, tick_labels, rotation=90)
         plt.ylabel('N. bouts', fontsize=12)
         plt.bar(np.arange(self.days), bout_counts, color=bar_color)
@@ -1312,17 +1343,12 @@ class CycleAnalyzer():
             plt.show()
     
     
-    def plot_bout_histogram(self, max_gap=None, min_duration=None, min_count=None, timescale='1s', bins=20,
+    def plot_bout_histogram(self, max_gap=None, min_duration=None, min_activity=None, bins=50,
                             filename=None, width=1000, height=600, dpi=96):
-        timescale = pd.Timedelta(timescale).asm8
-        if max_gap is None:
-            max_gap = self.__max_gap
-        if min_duration is None:
-            min_duration = self.__min_duration
-        if min_count is None:
-            min_count = self.__min_count
-        timeseries = self.activity_bouts(max_gap, min_duration, min_count)
-        values = (timeseries[:, 1] - timeseries[:, 0]) / timescale
+        bouts = self.activity_bouts(max_gap, min_duration, min_activity).astype('int')
+        bout_starts = np.nonzero(np.diff(bouts, prepend=0, append=0, axis=-1) > 0)[0]
+        bout_ends = np.nonzero(np.diff(bouts, prepend=0, append=0, axis=-1) < 0)[0]
+        values = (bout_ends - bout_starts) * self.step.astype('int')
         graph_color = '#404040'
         if filename is not None:
             filename = Path(filename)
@@ -1338,26 +1364,49 @@ class CycleAnalyzer():
             plt.show()
     
     
-    def activity_onset(self, step=None, percentile=20, N='6h', M='6h', bouts=False):
-        step, steps_per_day = self.__get_step_spd(step)
-        timestamps, values = self.discretize(step, bouts=bouts)
-        N = pd.Timedelta(N).asm8 // step
-        M = pd.Timedelta(M).asm8 // step
-        conv = np.array([-1]*N + [1]*M)
-        result = np.zeros(self.days, dtype='<M8[ns]')
-        for i in range(self.days):
-            tmp = values[i*steps_per_day:(i+1)*steps_per_day]
+    def activity_onset(self, step=None, percentile=20, N='6h', M='6h', bouts=False, mode='step'):
+        step, steps_per_day = self.__get_step(step)
+        if bouts:
+            values, timestamps = self.__discretize(self.bouts, step)
+        else:
+            values, timestamps = self.__discretize(self.activity, step)
+        values = values.reshape(self.days, steps_per_day)
+        N = pd.Timedelta(N).asm8.astype('<m8[m]') // step
+        M = pd.Timedelta(M).asm8.astype('<m8[m]') // step
+        if mode == 'step':    
+            left = np.full(N, -1)
+            right = np.full(M, 1)
+            conv = np.concatenate((left, right))
+        elif mode == 'linear':
+            left = np.linspace(-1/N, -1, N)
+            right = np.linspace(1, 1/M, M)
+            conv = np.concatenate((left, right))
+        elif mode == 'quadratic':
+            left = -np.linspace(1/N, 1, N) ** 0.5
+            right = np.linspace(1, 1/M, M) ** 0.5
+            conv = np.concatenate((left, right))
+        elif mode == 'sine':
+            left = -np.sin(np.linspace(1/N, 1, N) * np.pi/2)
+            right = np.sin(np.linspace(1, 1/M, M) * np.pi/2)
+            conv = np.concatenate((left, right))
+        else:
+            raise ValueError(f'unrecognized mode')
+        result = np.zeros(self.days, dtype='<M8[m]')
+        for d in range(self.days):
+            tmp = values[d]
             active = tmp >= np.percentile(tmp[tmp != 0], percentile, interpolation='higher')
             tmp[:] = -1
             tmp[active] = 1
-            idx = np.correlate(conv, tmp, mode='same').argmax()
-            result[i] = timestamps[i*steps_per_day + idx]
+            tmp = np.pad(tmp, steps_per_day, mode='constant', constant_values=-1)
+            t = np.correlate(tmp, conv, mode='same')[steps_per_day : 2 * steps_per_day]
+            idx = steps_per_day - t[::-1].argmax() - 1
+            result[d] = timestamps[d * steps_per_day + idx]
         return result
     
     
-    def plot_activity_onset(self, step=None, percentile=20, N='6h', M='6h', bouts=False,
+    def plot_activity_onset(self, step=None, percentile=20, N='6h', M='6h', bouts=False, mode='step',
                             filename=None, width=1000, height=600, dpi=96):
-        values = self.activity_onset(step, percentile, N, M, bouts)
+        values = self.activity_onset(step, percentile, N, M, bouts, mode)
         values = ((values - self.__t0) % self.__day) / self.__hour
         fig = plt.figure(figsize=(width/dpi, height/dpi))
         plt.ylim(-1, 24)
@@ -1370,63 +1419,10 @@ class CycleAnalyzer():
             tick_mask[i] = True
         tick_mask[-1] = True
         tick_pos = np.arange(self.days)[tick_mask]
-        tick_labels = np.arange(self.start, self.stop, self.__day)[self.mask][tick_mask].astype('datetime64[D]')
+        tick_labels = np.arange(self.start, self.stop, self.__day)[self.daily_mask][tick_mask].astype('datetime64[D]')
         plt.xticks(tick_pos, tick_labels, rotation=90)
         plt.plot(values)
         fig.text(0.5, 0.95, f"Activity Onset {self.descr}", ha='center', fontsize=20, wrap=False)
-        if filename:
-            plt.close(fig)
-            fig.savefig(filename, dpi=dpi)
-            print(f"File succesfully saved to {filename}")
-        else:
-            plt.show()
-    
-    def plot_actogram(self, step=None, bouts=True, filename=None, width=1000, height=100, dpi=96):
-        if filename is not None:
-            filename = Path(filename)
-        step, steps_per_day = self.__get_step_spd(step)
-        bar_color = '#000000'
-        timestamps, values = self.discretize(step, bouts=bouts)
-        fig, subplots = plt.subplots(self.days, 2, sharex=True, sharey=True,
-                                     figsize=(width/dpi, height*self.days/dpi), dpi=dpi,
-                                     gridspec_kw={'hspace': 0, 'wspace': 0})
-        minute_offset = (self.start - self.__t0) % self.__hour
-        tick_start = minute_offset / self.__day
-        hours_per_tick = 2
-        tick_pos = np.arange(tick_start, 0.999, hours_per_tick/24)*steps_per_day
-        tick_labels = []
-        if not minute_offset:
-            first_tick = self.start
-        else:
-            first_tick = self.start - minute_offset + self.__hour
-        for i in range(len(tick_pos)):
-            tick_label = pd.Timestamp(first_tick + i*hours_per_tick*self.__hour).strftime('%H')
-            tick_labels.append(tick_label)
-        hour_offset = ((self.start - self.__t0) % self.__day) / self.__day
-        fig.subplots_adjust(top=1-0.5/(self.days+1))
-        fig.text(0.5, 1 - 0.25/(self.days + 1), f"Actogram {self.descr}", ha='center', fontsize=20, wrap=False)
-        night = [self.night[i] for i in range(self.total_days) if self.mask[i]]
-        for i in range(1, 2*self.days):
-            d = i // 2
-            night_pos = (night[d] / self.__day - hour_offset) * steps_per_day
-            if d+1 < self.days:
-                night_pos2 = (night[d+1] / self.__day - hour_offset + 1) * steps_per_day
-            else:
-                night_pos2 = []
-            ax = subplots[d - (i+1)%2, (i+1) % 2]
-            ax.bar(np.arange(steps_per_day), values[d*steps_per_day : (d+1)*steps_per_day], 
-                   width=1, align='edge', color=bar_color)
-            for j in range(0, len(night_pos)):
-                ax.axvspan(night_pos[j, 0], night_pos[j, 1], facecolor='#808080', alpha=0.5)
-            for j in range(0, len(night_pos2)):
-                ax.axvspan(night_pos2[j, 0], night_pos2[j, 1], facecolor='#808080', alpha=0.5)
-            if not i%2:
-                ax.yaxis.set_label_position('right')
-            ax.set_yticks([])
-            ax.set_ylabel(f"{pd.Timestamp(timestamps[d*steps_per_day]).strftime('%Y-%m-%d')}", 
-                          rotation=0, fontsize=8, labelpad=40, va='center')
-        plt.xticks(ticks=tick_pos, labels=tick_labels)
-        plt.xlim([0, steps_per_day])
         if filename:
             plt.close(fig)
             fig.savefig(filename, dpi=dpi)

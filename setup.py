@@ -4,14 +4,17 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="chronobiology", # Replace with your own username
-    version="0.0.1",
+    name="chronobiology",
+    version="0.0.2",
     author="Ruslan Konovalov",
     author_email="konovalov.rus@sjtu.edu.cn",
     description="Package for chronobiology analysis",
     long_description="",
     long_description_content_type="text/markdown",
-    url="https://github.com/pypa/sampleproject",
+    url="https://github.com/ruslands/Chronobiology",
+    download_url="https://github.com/ruslands/Chronobiology/archive/v0.0.2.tar.gz",
+    keywords=['chronobiology','actogram','periodogram','sleep','analysis'],
+    install_requires=['influxdb','pandas','numpy','matplotlib'],
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
