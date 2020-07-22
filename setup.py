@@ -5,16 +5,16 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="chronobiology",
-    version="0.0.2",
+    version="0.0.4",
     author="Ruslan Konovalov",
     author_email="konovalov.rus@sjtu.edu.cn",
     description="Package for chronobiology analysis",
     long_description="",
     long_description_content_type="text/markdown",
     url="https://github.com/ruslands/Chronobiology",
-    download_url="https://github.com/ruslands/Chronobiology/archive/v0.0.2.tar.gz",
+    download_url="https://github.com/ruslands/Chronobiology/archive/v0.0.3.tar.gz",
     keywords=['chronobiology','actogram','periodogram','sleep','analysis'],
-    install_requires=['influxdb','pandas','numpy','matplotlib'],
+    install_requires=['influxdb', 'pandas', 'numpy', 'matplotlib', 'scipy'],
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
