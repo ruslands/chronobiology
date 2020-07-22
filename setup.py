@@ -12,7 +12,7 @@ setuptools.setup(
     long_description="",
     long_description_content_type="text/markdown",
     url="https://github.com/ruslands/Chronobiology",
-    download_url="https://github.com/ruslands/Chronobiology/archive/v0.0.3.tar.gz",
+    download_url="https://github.com/ruslands/Chronobiology/archive/v0.0.4.tar.gz",
     keywords=['chronobiology','actogram','periodogram','sleep','analysis'],
     install_requires=['influxdb', 'pandas', 'numpy', 'matplotlib', 'scipy'],
     packages=setuptools.find_packages(),
