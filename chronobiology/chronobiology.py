@@ -84,7 +84,7 @@ class DBQuery():
         :return: List of all tag names in the series.
 
         .. note::
-            Returnes an empty list if the query does not return any vaues, for example,
+            Returns an empty list if the query does not return any vaues, for example,
             if there are no tags in the series or if there is no series with the
             given name.
 
@@ -131,7 +131,7 @@ class DBQuery():
                 ``boolean``.
 
         .. note::
-            Returnes an empty list if the query does not return any vaues, for example,
+            Returns an empty list if the query does not return any vaues, for example,
             if there are no tags in the series or if there is no series with the
             given name.
 
@@ -179,7 +179,7 @@ class DBQuery():
         :return: List of all values of the tag in the series.
 
         .. note::
-            Returnes an empty list if the query does not return any vaues, for example,
+            Returns an empty list if the query does not return any vaues, for example,
             if there are no tags in the series or if there is no series with the
             given name.
 
