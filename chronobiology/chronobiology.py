@@ -1131,16 +1131,16 @@ class CycleAnalyzer():
         power.
 
         :type step: None|str|int|timedelta, optional
-        :param step: See func:`periodogram`.
+        :param step: See :func:`periodogram`.
 
         :type min_period: str|int|timedelta, optional
-        :param min_period: See func:`periodogram`.
+        :param min_period: See :func:`periodogram`.
 
         :type max_period: str|int|timedelta, optional
-        :param max_period: See func:`periodogram`.
+        :param max_period: See :func:`periodogram`.
 
         :type bouts: bool, optional
-        :param bouts: See func:`periodogram`.
+        :param bouts: See :func:`periodogram`.
 
         :type filename: None|str|PathLike, optional
         :param filename: The name of the file where the graph is saved.
