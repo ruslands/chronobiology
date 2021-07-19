@@ -10,9 +10,8 @@ Chronobiology documentation
    :maxdepth: 2
    :caption: Contents:
 
-
-.. autoclass:: chronobiology.chronobiology.CycleAnalyzer
-    :members:
+   cycle_analyzer
+   db_query
 
 
 Indices and tables
