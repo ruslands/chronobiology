@@ -14,3 +14,6 @@ These arrays must be loaded manually from any existing file, database or server.
 We recommend **InfluxDB** to store the analyzed data.
 The package provides class :class:`~chronobiology.chronobiology.DBQuery` to connect to
 your InfluxDB databases and read data from them.
+
+.. toctree::
+    demos/db_query

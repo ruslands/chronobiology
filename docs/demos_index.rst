@@ -4,6 +4,7 @@ Demos
 Here are some notebooks demonstrating the use of classes and methods.
 
 .. toctree::
+   demos/db_query
    demos/cycle_analyzer
 
 ..
