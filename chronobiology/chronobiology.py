@@ -58,13 +58,6 @@ class DBQuery():
 
         :rtype: list[str]
         :return: List of all measurement names in the database.
-
-        .. rubric:: Usage examples
-
-        ::
-
-            >>> q.get_measurements()
-            ['series1', 'series2', 'series_with_no_tags']
         """
         query = f"SHOW MEASUREMENTS;"
         result = self.client.query(query).raw['series']
@@ -87,19 +80,6 @@ class DBQuery():
             Returns an empty list if the query does not return any vaues, for example,
             if there are no tags in the series or if there is no series with the
             given name.
-
-        .. rubric:: Usage examples
-
-        ::
-
-            >>> q.get_tags('series1')
-            ['tag1', 'tag2']
-
-            >>> q.get_tags('nonexistent_series')
-            []
-
-            >>> q.get_tags('series_with_no_tags')
-            []
         """
         query = f'SHOW TAG KEYS FROM "{series}";'
         result = self.client.query(query).raw['series']
@@ -134,22 +114,6 @@ class DBQuery():
             Returns an empty list if the query does not return any vaues, for example,
             if there are no tags in the series or if there is no series with the
             given name.
-
-        .. rubric:: Usage examples
-
-        ::
-
-            >>> q.get_fields('series1')
-            ['value']
-            >>> q.get_fields('series1', return_types=False)
-            ['value']
-            >>> q.get_fields('series1', return_types=True)
-            (['value'], ['integer'])
-            >>> q.get_fields('series2', return_types=True)
-            (['num_petals', 'petal_length', 'species_name', 'is_female'],
-             ['integer', 'float', 'string', 'boolean'])
-            >>> q.get_fields('nonexistent_series')
-            []
         """
 
         query = f'SHOW FIELD KEYS FROM "{series}";'
@@ -182,17 +146,6 @@ class DBQuery():
             Returns an empty list if the query does not return any vaues, for example,
             if there are no tags in the series or if there is no series with the
             given name.
-
-        .. rubric:: Usage examples
-
-        ::
-
-            >>> q.get_keys('series1', 'tag1')
-            ['foo', 'bar']
-            >>> q.get_keys('series1', 'nonexistent_tag')
-            []
-            >>> q.get_keys('nonexistent_series', 'tag1')
-            []
         """
         query = f'SHOW TAG VALUES FROM "{series}" WITH KEY = "{str(key)}";'
         result = self.client.query(query).raw['series']
@@ -282,55 +235,6 @@ class DBQuery():
 
             Value
                 Numpy array of the corresponding field/tag values.
-
-        .. rubric:: Usage examples
-
-        ::
-
-            >>> # Use '*' to select all fields/tags:
-            >>> q.get_data('series1', '*')
-            { 'time': array(['2019-11-05T00:00:00.000000000',
-                             '2019-11-05T06:00:00.000000000',
-                             '2019-11-06T00:00:00.000000000'],
-                            dtype='datetime64[ns]'),
-              'tag1': array(['foo', 'bar', 'foo'], dtype='<U3'),
-              'tag2': array(['1', '2', '3'], dtype='<U1'),
-              'value': array([1.0, 1.5, 2.0], dtype=float64) }
-            >>> # Start is inclusive:
-            >>> q.get_data('series1', 'value', start='2019-11-05 06:00')
-            { 'time': array(['2019-11-05T06:00:00.000000000',
-                             '2019-11-06T00:00:00.000000000'],
-                            dtype='datetime64[ns]'),
-              'value': array([1.5, 2.0], dtype=float64) }
-            >>> # Stop is exclusive:
-            >>> q.get_data('series1', ['value', 'tag1'], stop='2019-11-06')
-            { 'time': array(['2019-11-05T00:00:00.000000000',
-                             '2019-11-05T06:00:00.000000000'],
-                            dtype='datetime64[ns]'),
-              'value': array([1.0, 1.5], dtype=float64),
-              'tag1': array(['foo', 'bar'], dtype='<U3') }
-            >>> # Specify a key value:
-            >>> q.get_data('series1', '*', {'tag1': 'foo'})
-            { 'time': array(['2019-11-05T00:00:00.000000000',
-                             '2019-11-06T00:00:00.000000000'],
-                            dtype='datetime64[ns]'),
-              'tag1': array(['foo', 'foo'], dtype='<U3'),
-              'tag2': array(['1', '3'], dtype='<U1'),
-              'value': array([1.0, 2.0], dtype=float64)}
-            >>> # Specify multiple key values and use string autoconversion:
-            >>> q.get_data('series1', 'value', {'tag2': [1, 2]})
-            { 'time': array(['2019-11-05T00:00:00.000000000',
-                             '2019-11-05T06:00:00.000000000'],
-                            dtype='datetime64[ns]'),
-              'tag1': array(['foo', 'bar'], dtype='<U3'),
-              'tag2': array(['1', '2'], dtype='<U1'),
-              'value': array([1.0, 1.5], dtype=float64) }
-            >>> # Specify multiple keys:
-            >>> q.get_data('series1', 'value', {'tag1': 'foo', 'tag2': [1, 2]})
-            { 'time': array(['2019-11-05T00:00:00.000000000'], dtype='datetime64[ns]'),
-              'tag1': array(['foo'], dtype='<U3'),
-              'tag2': array(['1'], dtype='<U1'),
-              'value': array([1.0], dtype=float64) }
         """
         def _tz_convert(t, local_tz=False):
             # Never adjust timezone for epoch timestamps
@@ -727,7 +631,7 @@ class CycleAnalyzer():
 
     @property
     def timestamps(self):
-        """ Timestamps of activity records.
+        """Timestamps of activity records.
 
         :type: np.array[np.datetime64]
         :return: Bin starts (discrete time points).
@@ -738,7 +642,7 @@ class CycleAnalyzer():
 
     @property
     def activity(self):
-        """ Activity events associated with each timestamp.
+        """Activity events associated with each timestamp.
 
         :type: np.array[int|float]
         :return: Activity values for each bin.
@@ -752,7 +656,7 @@ class CycleAnalyzer():
 
     @property
     def night(self):
-        """ Boolean array denoting the timestamps associated with night.
+        """Boolean array denoting the timestamps associated with night.
 
         The i-th timestamp is associated with night if ``night[i]`` = ``True`` and
         with day otherwise.
@@ -766,7 +670,7 @@ class CycleAnalyzer():
 
     @property
     def bouts(self):
-        """ Precalculated bouts to be used in class methods when ``bouts=True`` is \
+        """Precalculated bouts to be used in class methods when ``bouts=True`` is \
             passed to them.
 
         :type: np.array[int]
@@ -953,7 +857,7 @@ class CycleAnalyzer():
 
         :type activity_onset: None|False|str, optional
         :param activity_onset: Shape of the convolution kernel to use for activity onset
-            calculation.
+            calculation, defaults to ``'step'``.
             To turn the activity onset display off pass ``None``, ``False`` or string
             ``'none'`` (case-insensitive).
             Otherwise it must be one of the strings recognized by
@@ -961,16 +865,16 @@ class CycleAnalyzer():
 
         :type percentile: int, optional
         :param percentile: Percentile of the daily non-zero activity to use as a
-            threshold for activity onset calculation.
+            threshold for activity onset calculation, defaults to ``20``.
             Activity lower than that is treated as a zero activity.
 
         :type N: str|int|timedelta, optional
         :param N: Length of the period of negative values (daytime, left part) in the
-            convolution kernel for activity onset calculation.
+            convolution kernel for activity onset calculation, defaults to ``'6h'``.
 
         :type M: str|int|timedelta, optional
         :param M: Length of the period of positive values (nighttime, right part) in the
-            convolution kernel for activity onset calculation.
+            convolution kernel for activity onset calculation, defaults to ``'6h'``.
 
         :type filename: None|str|PathLike, optional
         :param filename: The name of the file where the graph is saved.
@@ -1563,7 +1467,7 @@ class CycleAnalyzer():
 
 
     def daily_bouts(self, max_gap=None, min_duration=None, min_activity=None):
-        """ Calculate daily activity bout statistics.
+        """Calculate daily activity bout statistics.
 
         At first it calculates activity bouts based on the provided parameters and then
         for each day, it calculates the number of activity bouts and the average
@@ -1879,6 +1783,37 @@ class CycleAnalyzer():
 
 def generate_data(points_per_day=100, days=10, activity_period='24h', night_period='24h',
                   bg_ratio=0.2, multiactivity=False):
+    """Generate random input data.
+
+    :type points_per_day: int
+    :param points_per_day: Number of measurement points per day, defaults to ``100``.
+
+    :type days: int
+    :param days: Series length in days, defaults to ``10``.
+
+    :type activity_period: str|int|timedelta
+    :param activity_period: Activity period length, defaults to ``'24h'``.
+
+    :type night_period: str|int|timedelta
+    :param night_period: Period of night, defaults to ``'24h'``.
+
+    :type bg_ratio: float
+    :param bg_ratio: Backgraoud activity ratio, defaults to ``0.2``.
+
+    :type multiactivity: bool
+    :param multiactivity: Multiactivity, defaults to ``False``.
+
+    :rtype: dict[str: np.array[np.datetime64]|np.array[float]|np.array[bool]]
+    :return: Dictionary containing arrays ``'time'``, ``'value'`` and ``'is_night'``
+        ready to be used as input for the :class:`CycleAnalyzer` constructor.
+
+    .. rubric:: Usage example
+
+    ::
+
+        >>> data = generate_data()
+        >>> ca = CycleAnalyzer(data['time'], data['value'], data['is_night'])
+    """
     rng = np.random.default_rng()
     start = pd.Timestamp('2020-01-01').asm8.astype('<M8[m]')
     activity_period = pd.Timedelta(activity_period).asm8.astype('<m8[m]')
@@ -1919,6 +1854,19 @@ def generate_data(points_per_day=100, days=10, activity_period='24h', night_peri
 
 
 def generate_night(timeseries, night_period='24h'):
+    ''' Generate random ``is_night`` array.
+
+    :type timeseries: np.array[np.datetime64]
+    :param timeseries: Timestamps of measurements.
+
+    :type night_period: str|int|timedelta, optional
+    :param night_period: Period of night, defualts to ``'24h'``.
+
+    :rtype: np.array[bool]
+    :return: Array denoting whether night (``True``) or day (``False``) is associated
+        with a corresponding measurement.
+
+    '''
     rng = np.random.default_rng()
     night_period = pd.Timedelta(night_period).asm8.astype('<m8[m]')
     is_night = np.ones(timeseries.size, dtype='bool')

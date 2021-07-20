@@ -5,3 +5,4 @@ matplotlib>=3.3.4
 scipy>=1.5.4
 Sphinx>=4.1.1
 sphinx-rtd-theme==0.5.2
+nbsphinx>=0.8.6
