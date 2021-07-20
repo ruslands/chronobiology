@@ -29,12 +29,6 @@ class DBQuery():
 
         :type port: int, optional
         :param port: Connection port, defaults to ``8086``.
-
-        .. rubric:: Usage exmamples
-
-        ::
-
-            >>> q = DBQuery('db', 'user', 'password')
         """
         self.database = database
         self.username = username
