@@ -11,3 +11,9 @@ Here are some notebooks demonstrating the use of classes and methods.
    WARNING!
    demos/db_query is a pseudo-notebook, it was generated manually (by editing its JSON
    file), so don't try to execute it with python.
+
+Downloads
+---------
+
+* :download:`demos/db_query.ipynb`
+* :download:`demos/cycle_analyzer.ipynb`

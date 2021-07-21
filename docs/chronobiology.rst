@@ -1,10 +1,11 @@
 Chronobiology module documentation
 ==================================
 
-Main module providing classes and methods to collect, generate and analyze data.
+Main module providing classes and methods to collect, generate, calculate and plot
+circadian cycles data.
 
 .. automodule:: chronobiology.chronobiology
-    :members:
+    :members: generate_data, generate_night
 
     .. rubric:: Classes
 

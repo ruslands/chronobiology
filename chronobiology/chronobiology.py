@@ -62,7 +62,7 @@ class DBQuery():
 
 
     def get_tags(self, series):
-        """Get all tags (tag names) in the series.
+        """Get all tags (tag names) in a series.
 
         :type series: str
         :param series: Name of the series.
@@ -84,7 +84,7 @@ class DBQuery():
 
 
     def get_fields(self, series, return_types=False):
-        """Get all fields in the series.
+        """Get all fields in a series.
 
         :type series: str
         :param series: Name of the series.
@@ -124,14 +124,14 @@ class DBQuery():
                 return []
 
 
-    def get_keys(self, series, key):
-        """Get list of all tag values for a given tag name in the series.
+    def get_keys(self, series, tag):
+        """Get list of all tag values for a given tag in a series.
 
         :type series: str
         :param series: Name of the series.
 
-        :type key: str
-        :param key: Name of the key.
+        :type tag: str
+        :param tag: Name of the tag.
 
         :rtype: list[str]
         :return: List of all values of the tag in the series.
@@ -141,7 +141,7 @@ class DBQuery():
             if there are no tags in the series or if there is no series with the
             given name.
         """
-        query = f'SHOW TAG VALUES FROM "{series}" WITH KEY = "{str(key)}";'
+        query = f'SHOW TAG VALUES FROM "{series}" WITH KEY = "{str(tag)}";'
         result = self.client.query(query).raw['series']
         if result:
             return [x[1] for x in result[0]['values']]
@@ -150,46 +150,46 @@ class DBQuery():
 
 
     def get_data(self, series, fields, keys=None, start=None, stop=None, local_tz=False):
-        """Get the data (records) for the specified fields/tags in the series.
+        """Get data (records) for specified fields/tags in a series.
 
         :type series: str
         :param series: Name of the series.
 
         :type fields: str|list[str]|tuple[str]|set[str]|dict[str: str|type]
-        :param fields: Name(s) of the fields in the series.
-            The parameter is treated differently depending on it's type:
+        :param fields: Name(s) of fields/tags in the series.
+            This parameter is treated differently depending on it's type:
 
             ``str``
-                Treated as single field name to return.
+                Treated as a single field/tag name to return.
                 If ``fields`` = ``'*'`` then all fields and tags are returned.
 
             ``list[str]``, ``tuple[str]`` or ``set[str]``
-                Treated as a collection of field and tag names to return.
+                Treated as a collection of field/tag names to return.
 
             ``dict[str: str|type]``
                 The keys are treated as field/tag names, and the values are treated as
                 numpy types (or names of numpy types) of the corresponding keys.
 
-                The output is converted from the InfluxDB types to the types
+                The output is converted from InfluxDB types to the types
                 specified in the dictionary.
 
                 Use ``None`` as a field type to enable type autodetection and/or
                 avoid type conversion for that field.
 
         :type keys: None|dict[str: obj], optional
-        :param keys: Dictionary providing the rules to select records with specific
-            fields/tags, defaults to ``None``.
+        :param keys: Dictionary providing rules to select records with specific
+            field/tag values, defaults to ``None``.
 
-            If ``None`` then the selected records are not filtered.
+            If ``None`` then selected records are not filtered.
             Otherwise the dictionary is treated as follows:
 
             Key
-                Name of the filtered fields/tags.
+                Name of the filtered field/tag.
 
             Values
-                Value(s) of the corresponding field/tag of the selected records.
+                Value(s) of the corresponding field/tag to be selected.
 
-                Each value can be a scalar or a collection of all selected values
+                Each value can be a scalar or a collection of all values to be selected
                 (``list``, ``tuple`` or ``set``)
 
         :type start: None|str|int|datetime, optional
@@ -333,7 +333,7 @@ class DBQuery():
 
 
 class CycleAnalyzer():
-    """Class to analyze circadian cycles for given timestamp data.
+    """Class to calculate and plot circadian cycles data.
 
     :vartype start: np.datetime64
     :ivar start: Adjusted lower time boundary (inclusive) of data included in analysis.
@@ -363,7 +363,7 @@ class CycleAnalyzer():
         ``start`` and ``stop`` timestamps.
 
     :vartype days: int
-    :ivar days: Number of days that weren't filtered out due to low activity.
+    :ivar days: Number of days not filtered out due to low activity.
 
     :vartype daily_mask: np.array[bool]
     :ivar vartype: Mask calculated from data and ``min_data_points``.
@@ -419,21 +419,20 @@ class CycleAnalyzer():
 
         :type step: str|int|timedelta, optional
         :param step: Discretization step, defaults to ``'1m'``.
-            All data is disretized by binning it into bins of this size.
+            All data is discretized by binning it into bins of this size.
 
         :type start: None|str|int|datetime, optional
         :param start: Lower time boundary (inclusive) for processed records, defaults to
             ``None``.
-            None indicates no lower boundary.
+            ``None`` indicates no lower boundary.
 
         :type stop: None|str|int|datetime, optional
         :param stop: Upper time boundary (exclusive) for processed records, defaults to
             ``None``.
-            None indicates no upper boundary.
+            ``None`` indicates no upper boundary.
 
         :type descr: str, optional
-        :param descr: Textual description that will be added to the end of plot
-            headers, defaults to ``''``.
+        :param descr: Textual description appended to the end of plot headers, defaults to ``''``.
             Used to specify the source of data on the plots.
 
         :type max_gap: str|int|timedelta, optional
@@ -773,8 +772,7 @@ class CycleAnalyzer():
         Also updates ``max_gap``, ``min_duration`` and ``min_activity`` if they are not
         ``None``.
 
-        Discretization step is taken from class initialization time (self.step). Returns
-        None.
+        Discretization step is taken from class initialization time (``self.step``).
 
         :type max_gap: None|str|int|timedelta, optional
         :param max_gap: Overrides ``self.max_gap`` if specified.
@@ -837,7 +835,7 @@ class CycleAnalyzer():
         onset for each day.
 
         :type step: None|str|int|timedelta, optional
-        :param step: Bin size (number of bars in actogram is equal to [24 hours] / step),
+        :param step: Bin size (the number of bars in actogram is equal to [24 hours] / step),
             defaults to ``None``.
             ``None`` stands for ``self.max_gap``.
 
@@ -846,7 +844,7 @@ class CycleAnalyzer():
             bouts rather then activity events, defualts to ``False``.
 
         :type log: bool, optional
-        :param log: Indicates whether log of activity is plotted, defaults to ``False``.
+        :param log: Indicates whether the log of activity is plotted, defaults to ``False``.
             Has no effect if ``bouts`` = ``True``.
 
         :type activity_onset: None|False|str, optional
@@ -871,17 +869,17 @@ class CycleAnalyzer():
             convolution kernel for activity onset calculation, defaults to ``'6h'``.
 
         :type filename: None|str|PathLike, optional
-        :param filename: The name of the file where the graph is saved.
+        :param filename: Name of the file where the graph is saved.
             If not specified then the graph is displayed on the screen.
 
         :type width: int, optional
-        :param width: Width of the plot in pixels, defaults to 1000.
+        :param width: Plot width in pixels, defaults to 1000.
 
         :type height: int, optional
-        :param height: Height of the plot in pixels, defaults to 100.
+        :param height: Plot height in pixels, defaults to 100.
 
         :type dpi: int, optional
-        :param dpi: Resolution of the plot, defaults to 100.
+        :param dpi: Plot resolution, defaults to 100.
         """
         if filename is not None:
             filename = Path(filename)
@@ -991,13 +989,12 @@ class CycleAnalyzer():
             bouts rather then activity events, defualts to ``False``.
 
         :rtype: (np.array[np.timedelta64], np.array[float])
-        :return: ``(periods, powers)``
-            where
+        :return: ``(periods, powers)`` where
 
-                ``periods`` is the periods in the range from ``min_period`` to \
-                    ``max_period`` (inclusive).
+            ``periods`` is periods in the range from ``min_period`` to \
+                ``max_period`` (inclusive).
 
-                ``powers`` is the corresponding periodogram powers for each period.
+            ``powers`` is the corresponding periodogram powers for each period.
         """
         step, _ = self.__get_step(step)
         min_period = pd.Timedelta(min_period).asm8.astype('<m8[m]')
@@ -1041,17 +1038,17 @@ class CycleAnalyzer():
         :param bouts: See :func:`periodogram`.
 
         :type filename: None|str|PathLike, optional
-        :param filename: The name of the file where the graph is saved.
+        :param filename: Name of the file where the graph is saved.
             If not specified then the graph is displayed on the screen.
 
         :type width: int, optional
-        :param width: Width of the plot in pixels, defaults to 1000.
+        :param width: Plot width in pixels, defaults to 1000.
 
         :type height: int, optional
-        :param height: Height of the plot in pixels, defaults to 600.
+        :param height: Plot height in pixels, defaults to 600.
 
         :type dpi: int, optional
-        :param dpi: Resolution of the plot, defaults to 100.
+        :param dpi: Plot resolution, defaults to 100.
         """
         periods, values = self.periodogram(step, min_period, max_period, bouts)
         periods = periods.astype('int')
@@ -1100,11 +1097,11 @@ class CycleAnalyzer():
         :return: ``(daily_values, total)`` or ``(daily_values, total, auc_val)`` if
             ``auc`` = ``True`` where
 
-                ``daily_values`` is the relative amplitude for each day;
+            ``daily_values`` is the relative amplitude for each day;
 
-                ``total`` is the relative amplitude calculated from the data for all days;
+            ``total`` is the relative amplitude calculated from the data for all days;
 
-                ``auc_val`` is the area under the curve (integral).
+            ``auc_val`` is the area under the curve (integral).
         """
         result = np.zeros(self.total_days)
         if bouts:
@@ -1125,23 +1122,23 @@ class CycleAnalyzer():
     def plot_light_activity(self, bouts=False, filename=None, width=1000, height=600, dpi=100):
         """Calculate and plot :func:`light_activity` for each day.
 
-        The plot also includes the total value based on data for all days.
+        The plot also includes   total value based on data for all days.
 
         :type bouts: bool, optional
         :param bouts: See :func:`light_activity`.
 
         :type filename: None|str|PathLike, optional
-        :param filename: The name of the file where the graph is saved.
+        :param filename: Name of the file where the graph is saved.
             If not specified then the graph is displayed on the screen.
 
         :type width: int, optional
-        :param width: Width of the plot in pixels, defaults to 1000.
+        :param width: Plot width in pixels, defaults to 1000.
 
         :type height: int, optional
-        :param height: Height of the plot in pixels, defaults to 600.
+        :param height: Plot height in pixels, defaults to 600.
 
         :type dpi: int, optional
-        :param dpi: Resolution of the plot, defaults to 100.
+        :param dpi: Plot resolution, defaults to 100.
         """
         values, total, auc = self.light_activity(bouts, True)
         graph_color = '#000000'
@@ -1226,11 +1223,11 @@ class CycleAnalyzer():
         :return: ``(daily_values, total)`` or ``(daily_values, total, auc_val)`` if
             ``auc`` = ``True`` where
 
-                ``daily_values`` is the relative amplitude for each day;
+            ``daily_values`` is the relative amplitude for each day;
 
-                ``total`` is the relative amplitude calculated from the data for all days;
+            ``total`` is the relative amplitude calculated from the data for all days;
 
-                ``auc_val`` is the area under the curve (integral).
+            ``auc_val`` is the area under the curve (integral).
         """
         step, steps_per_day = self.__get_step(step)
         if bouts:
@@ -1266,17 +1263,17 @@ class CycleAnalyzer():
         :param bouts: See :func:`intradaily_variability`.
 
         :type filename: None|str|PathLike, optional
-        :param filename: The name of the file where the graph is saved.
+        :param filename: Name of the file where the graph is saved.
             If not specified then the graph is displayed on the screen.
 
         :type width: int, optional
-        :param width: Width of the plot in pixels, defaults to 1000.
+        :param width: Plot width in pixels, defaults to 1000.
 
         :type height: int, optional
-        :param height: Height of the plot in pixels, defaults to 600.
+        :param height: Plot height in pixels, defaults to 600.
 
         :type dpi: int, optional
-        :param dpi: Resolution of the plot, defaults to 100.
+        :param dpi: Plot resolution, defaults to 100.
         """
         values, total, auc = self.intradaily_variability(step, bouts, True)
         graph_color = '#000000'
@@ -1323,11 +1320,11 @@ class CycleAnalyzer():
         :return: ``(daily_values, total)`` or ``(daily_values, total, auc_val)`` if
             ``auc`` = ``True`` where
 
-                ``daily_values`` is the relative amplitude for each day;
+            ``daily_values`` is the relative amplitude for each day;
 
-                ``total`` is the relative amplitude calculated from the data for all days;
+            ``total`` is the relative amplitude calculated from the data for all days;
 
-                ``auc_val`` is the area under the curve (integral).
+            ``auc_val`` is the area under the curve (integral).
         """
 
         def window1d(a, width, step=1):
@@ -1420,17 +1417,17 @@ class CycleAnalyzer():
         :param bouts: See :func:`relative_amplitude`.
 
         :type filename: None|str|PathLike, optional
-        :param filename: The name of the file where the graph is saved.
+        :param filename: Name of the file where the graph is saved.
             If not specified then the graph is displayed on the screen.
 
         :type width: int, optional
-        :param width: Width of the plot in pixels, defaults to 1000.
+        :param width: Plot width in pixels, defaults to 1000.
 
         :type height: int, optional
-        :param height: Height of the plot in pixels, defaults to 600.
+        :param height: Plot height in pixels, defaults to 600.
 
         :type dpi: int, optional
-        :param dpi: Resolution of the plot, defaults to 100.
+        :param dpi: Plot resolution, defaults to 100.
         """
         values, total, auc = self.relative_amplitude(most_active, least_active, bouts, True)
         graph_color = '#000000'
@@ -1463,7 +1460,7 @@ class CycleAnalyzer():
     def daily_bouts(self, max_gap=None, min_duration=None, min_activity=None):
         """Calculate daily activity bout statistics.
 
-        At first it calculates activity bouts based on the provided parameters and then
+        At first it calculates activity bouts based on provided parameters and then
         for each day, it calculates the number of activity bouts and the average
         activity bout duration.
 
@@ -1480,10 +1477,10 @@ class CycleAnalyzer():
         :return: ``(bout_counts, bout_durations)``
             where
 
-                ``bout_counts`` is the number of activity bouts in each day;
+            ``bout_counts`` is the number of activity bouts in each day;
 
-                ``bout_durations`` is the average activity bout durations for each day \
-                    in minutes.
+            ``bout_durations`` is the average activity bout durations for each day \
+                in minutes.
         """
         bouts = self.activity_bouts(max_gap, min_duration, min_activity).reshape(self.days,
                                                                               self.steps_per_day).astype('int')
@@ -1498,8 +1495,8 @@ class CycleAnalyzer():
                          filename=None, width=1000, height=600, dpi=100):
         """Calculate and plot :func:`daily_bouts` statistics.
 
-        Bout counts are plotted as bar plot vs left y-axis and average bout durations
-        are plotted as line plot vs right y-axis.
+        Bout counts are plotted as a bar plot vs left y-axis and average bout durations
+        are plotted as a line plot vs right y-axis.
 
         :type max_gap: None|str|int|timedelta, optional
         :param max_gap: See :func:`daily_bouts`.
@@ -1511,17 +1508,17 @@ class CycleAnalyzer():
         :param min_activity: See :func:`daily_bouts`.
 
         :type filename: None|str|PathLike, optional
-        :param filename: The name of the file where the graph is saved.
+        :param filename: Name of the file where the graph is saved.
             If not specified then the graph is displayed on the screen.
 
         :type width: int, optional
-        :param width: Width of the plot in pixels, defaults to 1000.
+        :param width: Plot width in pixels, defaults to 1000.
 
         :type height: int, optional
-        :param height: Height of the plot in pixels, defaults to 600.
+        :param height: Plot height in pixels, defaults to 600.
 
         :type dpi: int, optional
-        :param dpi: Resolution of the plot, defaults to 100.
+        :param dpi: Plot resolution, defaults to 100.
         """
         bout_counts, bout_durations = self.daily_bouts(max_gap, min_duration, min_activity)
         graph_color = '#000000'
@@ -1554,7 +1551,7 @@ class CycleAnalyzer():
 
     def plot_bout_histogram(self, max_gap=None, min_duration=None, min_activity=None, bins=50,
                             filename=None, width=1000, height=600, dpi=100):
-        """Plot the histogram of :func:`activity_bouts` duration distribution.
+        """Plot histogram of :func:`activity_bouts` duration distribution.
 
         :type max_gap: None|str|int|timedelta, optional
         :param max_gap: See :func:`activity_bouts`.
@@ -1569,17 +1566,17 @@ class CycleAnalyzer():
         :param bins: Number of bins or array of bin edges.
 
         :type filename: None|str|PathLike, optional
-        :param filename: The name of the file where the graph is saved.
+        :param filename: Name of the file where the graph is saved.
             If not specified then the graph is displayed on the screen.
 
         :type width: int, optional
-        :param width: Width of the plot in pixels, defaults to 1000.
+        :param width: Plot width in pixels, defaults to 1000.
 
         :type height: int, optional
-        :param height: Height of the plot in pixels, defaults to 600.
+        :param height: Plot height in pixels, defaults to 600.
 
         :type dpi: int, optional
-        :param dpi: Resolution of the plot, defaults to 100.
+        :param dpi: Plot resolution, defaults to 100.
         """
         bouts = self.activity_bouts(max_gap, min_duration, min_activity).astype('int')
         bout_starts = np.nonzero(np.diff(bouts, prepend=0, append=0, axis=-1) > 0)[0]
@@ -1654,16 +1651,16 @@ class CycleAnalyzer():
 
             The possible kernels are:
 
-                ``'step'`` -- function with uniform left and right parts.
+            ``'step'`` -- function with uniform left and right parts.
 
-                ``'linear'`` -- linear function of the relative distance to the \
-                    discontinuity.
+            ``'linear'`` -- linear function of the relative distance to the \
+                discontinuity.
 
-                ``'quadratic'`` -- quadratic function (square root) of the relative \
-                    distance to the discontinuity.
+            ``'quadratic'`` -- quadratic function (square root) of the relative \
+                distance to the discontinuity.
 
-                ``'sine'`` -- function proportional to a shifted sine (cosine) of the \
-                    relative distance to the discontinuity.
+            ``'sine'`` -- function proportional to a shifted sine (cosine) of the \
+                relative distance to the discontinuity.
 
         :rtype: np.array[np.datetime64]
         :return: Activity onsets for each day.
@@ -1738,17 +1735,17 @@ class CycleAnalyzer():
         :param mode: See :func:`activity_onset`.
 
         :type filename: None|str|PathLike, optional
-        :param filename: The name of the file where the graph is saved.
+        :param filename: Name of the file where the graph is saved.
             If not specified then the graph is displayed on the screen.
 
         :type width: int, optional
-        :param width: Width of the plot in pixels, defaults to 1000.
+        :param width: Plot width in pixels, defaults to 1000.
 
         :type height: int, optional
-        :param height: Height of the plot in pixels, defaults to 600.
+        :param height: Plot height in pixels, defaults to 600.
 
         :type dpi: int, optional
-        :param dpi: Resolution of the plot, defaults to 100.
+        :param dpi: Plot resolution, defaults to 100.
         """
         values = self.activity_onset(step, percentile, N, M, bouts, mode)
         values = ((values - self.__t0) % self.__day) / self.__hour
@@ -1848,7 +1845,7 @@ def generate_data(points_per_day=100, days=10, activity_period='24h', night_peri
 
 
 def generate_night(timeseries, night_period='24h'):
-    ''' Generate random ``is_night`` array.
+    ''' Generate a random ``is_night`` array.
 
     :type timeseries: np.array[np.datetime64]
     :param timeseries: Timestamps of measurements.
