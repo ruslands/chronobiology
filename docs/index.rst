@@ -43,7 +43,7 @@ For more theory see the following paper:
    :caption: Contents:
    :maxdepth: 4
 
-   collecting_data
+   storing_data
    selecting_data
    analyzing_data
    chronobiology
