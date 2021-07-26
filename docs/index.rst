@@ -53,3 +53,4 @@ Indices and tables
 
 * :ref:`genindex`
 * :doc:`modules_index`
+* :doc:`downloads_index`
