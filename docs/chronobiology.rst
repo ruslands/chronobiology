@@ -1,5 +1,5 @@
-Chronobiology module documentation
-==================================
+Chronobiology module
+====================
 
 Main module providing classes and methods to collect, generate, calculate and plot
 circadian cycles data.
