@@ -75,8 +75,6 @@ pygments_style = None
 
 # -- Options for HTML output -------------------------------------------------
 
-import sphinx_rtd_theme
-
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
@@ -183,6 +181,3 @@ epub_exclude_files = ['search.html']
 
 autoclass_content = 'both'
 autodoc_member_order = 'bysource'
-
-#autodoc_default_flags = ['members']
-#autosummary_generate = True
