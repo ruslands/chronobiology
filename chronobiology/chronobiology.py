@@ -1026,16 +1026,20 @@ class CycleAnalyzer():
         power.
 
         :type step: None|str|int|timedelta, optional
-        :param step: See :func:`periodogram`.
+        :param step: Step size for the generating periods.
+            The first period has a length of ``min_period``, the second period has a
+            length of ``min_period + step`` and so on.
+            ``None`` stands for ``self.max_gap``.
 
         :type min_period: str|int|timedelta, optional
-        :param min_period: See :func:`periodogram`.
+        :param min_period: Minimal period length, inclusive, defaults to ``'16h'``.
 
         :type max_period: str|int|timedelta, optional
-        :param max_period: See :func:`periodogram`.
+        :param max_period: Maximal period length, inclusive, defaults to ``'32h'``.
 
         :type bouts: bool, optional
-        :param bouts: See :func:`periodogram`.
+        :param bouts: Indicates that the calculation is based on the number of activity
+            bouts rather then activity events, defualts to ``False``.
 
         :type filename: None|str|PathLike, optional
         :param filename: Name of the file where the graph is saved.
@@ -1125,7 +1129,8 @@ class CycleAnalyzer():
         The plot also includes   total value based on data for all days.
 
         :type bouts: bool, optional
-        :param bouts: See :func:`light_activity`.
+        :param bouts: Indicates that the calculation is based on the number of activity
+            bouts rather then activity events, defualts to ``False``.
 
         :type filename: None|str|PathLike, optional
         :param filename: Name of the file where the graph is saved.
@@ -1257,10 +1262,13 @@ class CycleAnalyzer():
         The plot also includes the total value based on data for all days.
 
         :type step: None|str|int|timedelta, optional
-        :param step: See :func:`intradaily_variability`.
+        :param step: Data discretization step used for calculations, defaults to
+            ``None``.
+            ``None`` stands for ``self.max_gap``.
 
         :type bouts: bool, optional
-        :param bouts: See :func:`intradaily_variability`.
+        :param bouts: Indicates that the calculation is based on the number of activity
+            bouts rather then activity events, defualts to ``False``.
 
         :type filename: None|str|PathLike, optional
         :param filename: Name of the file where the graph is saved.
@@ -1408,13 +1416,14 @@ class CycleAnalyzer():
         The plot also includes the total value based on data for all days.
 
         :type most_active: str|int|timedelta, optional
-        :param most_active: See :func:`relative_amplitude`.
+        :param most_active: Length of the most active period.
 
         :type least_active: str|int|timedelta, optional
-        :param least_active: See :func:`relative_amplitude`.
+        :param least_active: Length of the least active period.
 
         :type bouts: bool, optional
-        :param bouts: See :func:`relative_amplitude`.
+        :param bouts: Indicates that the calculation is based on the number of activity
+            bouts rather then activity events, defualts to ``False``.
 
         :type filename: None|str|PathLike, optional
         :param filename: Name of the file where the graph is saved.
@@ -1499,13 +1508,13 @@ class CycleAnalyzer():
         are plotted as a line plot vs right y-axis.
 
         :type max_gap: None|str|int|timedelta, optional
-        :param max_gap: See :func:`daily_bouts`.
+        :param max_gap: Overrides ``self.max_gap`` if specified.
 
         :type min_duration: None|str|int|timedelta, optional
-        :param min_duration: See :func:`daily_bouts`.
+        :param min_duration: Overrides ``self.min_duration`` if specified.
 
         :type min_activity: None|int, optional
-        :param min_activity: See :func:`daily_bouts`.
+        :param min_activity: Overrides ``self.min_activity`` if specified.
 
         :type filename: None|str|PathLike, optional
         :param filename: Name of the file where the graph is saved.
@@ -1554,13 +1563,13 @@ class CycleAnalyzer():
         """Plot histogram of :func:`activity_bouts` duration distribution.
 
         :type max_gap: None|str|int|timedelta, optional
-        :param max_gap: See :func:`activity_bouts`.
+        :param max_gap: Overrides ``self.max_gap`` if specified.
 
         :type min_duration: None|str|int|timedelta, optional
-        :param min_duration: See :func:`activity_bouts`.
+        :param min_duration: Overrides ``self.min_duration`` if specified.
 
         :type min_activity: None|int, optional
-        :param min_activity: See :func:`activity_bouts`.
+        :param min_activity: Overrides ``self.min_activity`` if specified.
 
         :type bins: int|np.array[int], optional
         :param bins: Number of bins or array of bin edges.
@@ -1717,22 +1726,48 @@ class CycleAnalyzer():
         the day (the maximal possible value is 24).
 
         :type step: None|str|int|timedelta, optional
-        :param step: See :func:`activity_onset`.
+        :param step: Data discretization step used for calculations, defaults to
+            ``None``.
+            ``None`` stands for ``self.max_gap``.
 
         :type percentile: int, optional
-        :param percentile: See :func:`activity_onset`.
+        :param percentile: Percentile of the daily non-zero activity to use as a
+            threshold for activity onset calculation.
+            Activity lower than that is treated as a zero activity.
 
         :type N: str|int|timedelta, optional
-        :param N: See :func:`activity_onset`.
+        :param N: Length of the period of negative values (daytime, left part) in the
+            convolution kernel for activity onset calculation.
 
         :type M: str|int|timedelta, optional
-        :param M: See :func:`activity_onset`.
+        :param M: Length of the period of positive values (nighttime, right part) in the
+            convolution kernel for activity onset calculation.
 
         :type bouts: bool, optional
-        :param bouts: See :func:`activity_onset`.
+        :param bouts: Indicates that the calculation is based on the number of activity
+            bouts rather then activity events, defualts to ``False``.
 
         :type mode: str, optional
-        :param mode: See :func:`activity_onset`.
+        :param mode: Defines the shape of the convolution kernel.
+            Each kernel has a discontinuity where left and righ parts connect (the
+            values around the discontinuity are -1 and 1 for the left and right parts
+            respectively).
+            For kernels other than *step* the left part is decreasing from 0 to -1 and
+            the right part is decreasing from 1 to 0, i.e. the parts of the kernel
+            further from the discontinuity are given less weight.
+
+            The possible kernels are:
+
+            ``'step'`` -- function with uniform left and right parts.
+
+            ``'linear'`` -- linear function of the relative distance to the \
+                discontinuity.
+
+            ``'quadratic'`` -- quadratic function (square root) of the relative \
+                distance to the discontinuity.
+
+            ``'sine'`` -- function proportional to a shifted sine (cosine) of the \
+                relative distance to the discontinuity.
 
         :type filename: None|str|PathLike, optional
         :param filename: Name of the file where the graph is saved.
