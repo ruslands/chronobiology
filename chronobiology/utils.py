@@ -34,14 +34,14 @@ def generate_data(
 
     :rtype: dict[str: np.array[np.datetime64]|np.array[float]|np.array[bool]]
     :return: Dictionary containing arrays ``'time'``, ``'value'`` and ``'is_night'``
-        ready to be used as input for the :class:`CycleAnalyzer` constructor.
+        ready to be used as input for the :class:`Chronobiology` constructor.
 
     .. rubric:: Usage example
 
     ::
 
         >>> data = generate_data()
-        >>> ca = CycleAnalyzer(data['time'], data['value'], data['is_night'])
+        >>> ca = Chronobiology(data['time'], data['value'], data['is_night'])
     """
     rng = np.random.default_rng()
     start = pd.Timestamp("2020-01-01").asm8.astype("<M8[m]")
@@ -49,9 +49,7 @@ def generate_data(
     night_period = pd.Timedelta(night_period).asm8.astype("<m8[m]")
     minute = np.timedelta64(1, "m")
     nbursts = rng.integers(1, 3, endpoint=True)
-    activity_bursts = rng.integers(activity_period.astype("i8"), size=nbursts).astype(
-        "<m8[m]"
-    )
+    activity_bursts = rng.integers(activity_period.astype("i8"), size=nbursts).astype("<m8[m]")
 
     # Generate activity
     time = np.zeros(points_per_day * days, dtype="<M8[ns]")
@@ -63,15 +61,11 @@ def generate_data(
         background = start + rng.integers(activity_period.astype("i8"), size=bg_size)
         time[d * points_per_day : d * points_per_day + bg_size] = background
         # Activity bursts
-        bursts = np.tile(activity_bursts, burst_size // activity_bursts.size + 1)[
-            :burst_size
-        ]
+        bursts = np.tile(activity_bursts, burst_size // activity_bursts.size + 1)[:burst_size]
         bursts += (60 * rng.normal(size=burst_size)).astype("<m8[m]")
         time[d * points_per_day + bg_size : (d + 1) * points_per_day] = start + bursts
         if multiactivity:
-            value[
-                d * points_per_day + bg_size : (d + 1) * points_per_day
-            ] += rng.integers(10, size=burst_size)
+            value[d * points_per_day + bg_size : (d + 1) * points_per_day] += rng.integers(10, size=burst_size)
         d += 1
         start += activity_period
     sort = np.argsort(time)
@@ -118,9 +112,7 @@ def generate_night(timeseries, night_period="24h"):
     marks = np.array(marks)
     t0 = start
     t1 = t0 + marks[0, 1]
-    mark_it = cycle(
-        np.diff(marks, axis=0, append=(marks[0] + night_period).reshape(1, -1))
-    )
+    mark_it = cycle(np.diff(marks, axis=0, append=(marks[0] + night_period).reshape(1, -1)))
     while t0 <= stop:
         indices = np.nonzero((timeseries >= t0) & (timeseries < t1))
         is_night[indices] = False

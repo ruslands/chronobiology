@@ -7,7 +7,7 @@ import pandas as pd
 from scipy import integrate
 
 
-class CycleAnalyzer:
+class Chronobiology:
     """Class to calculate and plot circadian cycles data.
 
     :vartype start: np.datetime64
@@ -205,13 +205,9 @@ class CycleAnalyzer:
         pattern_days = [0]
         self.__night = np.zeros(self.steps_per_day * self.total_days, dtype="bool")
         night_array, _ = np.histogram(timestamps[night], intervals)
-        night_array = night_array.astype("bool").reshape(
-            self.total_days, self.steps_per_day
-        )
+        night_array = night_array.astype("bool").reshape(self.total_days, self.steps_per_day)
         day_array, _ = np.histogram(timestamps[~night], intervals)
-        day_array = day_array.astype("bool").reshape(
-            self.total_days, self.steps_per_day
-        )
+        day_array = day_array.astype("bool").reshape(self.total_days, self.steps_per_day)
         # If at some step there are both night and day data points, keep only one
         # night_array[day_array] = False # Option a)
         day_array[night_array] = False  # Option b)
@@ -242,11 +238,7 @@ class CycleAnalyzer:
         # Fill unassigned values in patterns and determine day/night boundaries
         # "Pretty" time values (in minutes) that will be favoured for day/night boundaries.
         pretty_numbers = [60, 30, 15, 10, 5]
-        pretty_numbers = [
-            n // self.step.astype("int")
-            for n in pretty_numbers
-            if n % self.step.astype("int") == 0
-        ]
+        pretty_numbers = [n // self.step.astype("int") for n in pretty_numbers if n % self.step.astype("int") == 0]
         # Alignment to the one step is always valid
         if not pretty_numbers or pretty_numbers[-1] != 1:
             pretty_numbers.append(1)
@@ -274,11 +266,9 @@ class CycleAnalyzer:
                     last_idx = i + 1
             else:
                 pattern[start_idx:] = last_val
-            self.__night[
-                pattern_start
-                * self.steps_per_day : (pattern_start + ndays)
-                * self.steps_per_day
-            ] = np.tile(pattern > 0, ndays)
+            self.__night[pattern_start * self.steps_per_day : (pattern_start + ndays) * self.steps_per_day] = np.tile(
+                pattern > 0, ndays
+            )
             pattern_start += ndays
             # We are interested only in night -> day borders, that's why less-than-zero condition
             boundaries += (np.diff(pattern, prepend=pattern[-1]) < 0) * ndays
@@ -286,9 +276,7 @@ class CycleAnalyzer:
         boundary_idx = np.nonzero(boundaries)[0]
         if boundary_idx.size > 0:
             # This sorting order prioritizes daytime over presense of night/day borders at the start of each day
-            boundary_idx = boundary_idx[
-                np.lexsort((-boundaries[boundary_idx], nighttime[boundary_idx]))
-            ][0]
+            boundary_idx = boundary_idx[np.lexsort((-boundaries[boundary_idx], nighttime[boundary_idx]))][0]
             # This sorting order prioritizes presense of night/day borders over daytime at the start of each day
             # boundary_idx = boundary_idx[np.lexsort((nighttime[boundary_idx], -boundaries[boundary_idx]))][0]
         else:
@@ -302,16 +290,10 @@ class CycleAnalyzer:
         if start_idx > 0:
             self.__timestamps = np.append(
                 self.__timestamps,
-                np.arange(self.__day, step=self.step)
-                + self.__timestamps[-1]
-                + self.step,
+                np.arange(self.__day, step=self.step) + self.__timestamps[-1] + self.step,
             )[start_idx:stop_idx]
-            self.__activity = np.append(
-                self.__activity, np.zeros(self.steps_per_day, dtype="int")
-            )[start_idx:stop_idx]
-            self.__night = np.append(self.__night, self.__night[-self.steps_per_day :])[
-                start_idx:stop_idx
-            ]
+            self.__activity = np.append(self.__activity, np.zeros(self.steps_per_day, dtype="int"))[start_idx:stop_idx]
+            self.__night = np.append(self.__night, self.__night[-self.steps_per_day :])[start_idx:stop_idx]
 
         # Mask out datapoints for inactive days
         self.daily_mask = np.ones(self.total_days, dtype="bool")
@@ -417,17 +399,13 @@ class CycleAnalyzer:
         else:
             max_gap = pd.Timedelta(max_gap).asm8.astype("<m8[m]")
             if max_gap % self.step != self.__zero:
-                raise ValueError(
-                    f"max_gap should be multiple of discretization step ({str(self.step)})"
-                )
+                raise ValueError(f"max_gap should be multiple of discretization step ({str(self.step)})")
         if min_duration is None:
             min_duration = self.min_duration
         else:
             min_duration = pd.Timedelta(min_duration).asm8.astype("<m8[m]")
             if min_duration % self.step != self.__zero:
-                raise ValueError(
-                    f"min_duration should be multiple of discretization step ({str(self.step)})"
-                )
+                raise ValueError(f"min_duration should be multiple of discretization step ({str(self.step)})")
         if min_activity is None:
             min_activity = self.min_activity
         max_gap = max_gap // self.step
@@ -435,19 +413,8 @@ class CycleAnalyzer:
         bouts = np.zeros_like(self.__activity, dtype="bool")
         indexes = np.nonzero(self.__activity >= min_activity)[0]
         if len(indexes) > 0:
-            bout_starts = indexes[
-                (
-                    np.diff(indexes, prepend=indexes[0] - max_gap - 1) > max_gap
-                ).nonzero()[0]
-            ]
-            bout_ends = (
-                indexes[
-                    (
-                        np.diff(indexes, append=indexes[0] + max_gap + 1) > max_gap
-                    ).nonzero()[0]
-                ]
-                + 1
-            )
+            bout_starts = indexes[(np.diff(indexes, prepend=indexes[0] - max_gap - 1) > max_gap).nonzero()[0]]
+            bout_ends = indexes[(np.diff(indexes, append=indexes[0] + max_gap + 1) > max_gap).nonzero()[0]] + 1
         else:
             bout_starts = np.zeros(0)
             bout_ends = np.zeros(0)
@@ -502,9 +469,7 @@ class CycleAnalyzer:
             if max_gap < self.step:
                 max_gap = self.step
             elif max_gap % self.step != self.__zero:
-                raise ValueError(
-                    f"max_gap should be multiple of discretization step ({str(self.step)})"
-                )
+                raise ValueError(f"max_gap should be multiple of discretization step ({str(self.step)})")
             self.max_gap = max_gap
         else:
             max_gap = self.max_gap
@@ -513,9 +478,7 @@ class CycleAnalyzer:
             if min_duration < self.step:
                 min_duration = self.step
             elif min_duration % self.step != self.__zero:
-                raise ValueError(
-                    f"min_duration should be multiple of discretization step ({str(self.step)})"
-                )
+                raise ValueError(f"min_duration should be multiple of discretization step ({str(self.step)})")
             self.min_duration = min_duration
         else:
             min_duration = self.min_duration
@@ -666,14 +629,10 @@ class CycleAnalyzer:
             first_tick = self.start - minute_offset + self.__hour
             tick_start = (self.__hour - minute_offset) / self.__day
         hours_per_tick = 2
-        tick_pos = (
-            np.arange(tick_start, 1 + tick_start, hours_per_tick / 24) * steps_per_day
-        )
+        tick_pos = np.arange(tick_start, 1 + tick_start, hours_per_tick / 24) * steps_per_day
         tick_labels = []
         for i in range(len(tick_pos)):
-            tick_label = pd.Timestamp(
-                first_tick + i * hours_per_tick * self.__hour
-            ).strftime("%H")
+            tick_label = pd.Timestamp(first_tick + i * hours_per_tick * self.__hour).strftime("%H")
             tick_labels.append(tick_label)
         fig.text(
             0.5,
@@ -691,17 +650,13 @@ class CycleAnalyzer:
         for i in range(1, 2 * self.days):
             d = i // 2
             if d != last_d:
-                night_pos = timestamps[
-                    np.nonzero(np.diff(night[d], prepend=False, append=False))[0]
-                ].reshape(-1, 2)
+                night_pos = timestamps[np.nonzero(np.diff(night[d], prepend=False, append=False))[0]].reshape(-1, 2)
                 night_pos = ((night_pos - timestamps[0]) / self.__day) * steps_per_day
             last_d = d
             ax = subplots[d - (i + 1) % 2, (i + 1) % 2]
             ax.bar(interval, values[d], width=1, align="edge", color=bar_color)
             for j in range(len(night_pos)):
-                ax.axvspan(
-                    night_pos[j, 0], night_pos[j, 1], color=night_color, alpha=0.5
-                )
+                ax.axvspan(night_pos[j, 0], night_pos[j, 1], color=night_color, alpha=0.5)
             if not i % 2:
                 ax.yaxis.set_label_position("right")
             if activity_onset:
@@ -757,10 +712,7 @@ class CycleAnalyzer:
         min_period = pd.Timedelta(min_period).asm8.astype("<m8[m]")
         max_period = pd.Timedelta(max_period).asm8.astype("<m8[m]")
         if min_period % step + max_period % step != self.__zero:
-            raise ValueError(
-                f"min_period and max_period should be divisible "
-                f"by step ({pd.Timedelta(step)})"
-            )
+            raise ValueError(f"min_period and max_period should be divisible " f"by step ({pd.Timedelta(step)})")
         if bouts:
             values, _ = self.__discretize(self.bouts, step)
         else:
@@ -842,9 +794,7 @@ class CycleAnalyzer:
         plt.xlim([periods[0], periods[-1]])
 
         plt.plot(periods, values, color=graph_color)
-        fig.text(
-            0.5, 0.95, f"Periodogram {self.descr}", ha="center", fontsize=20, wrap=False
-        )
+        fig.text(0.5, 0.95, f"Periodogram {self.descr}", ha="center", fontsize=20, wrap=False)
         fig.text(
             0.5,
             0.0,
@@ -882,9 +832,7 @@ class CycleAnalyzer:
         """
         result = np.zeros(self.total_days)
         if bouts:
-            day_activity, _ = self.__discretize(
-                self.bouts.astype("int") * ~self.night, self.__day
-            )
+            day_activity, _ = self.__discretize(self.bouts.astype("int") * ~self.night, self.__day)
             all_activity, _ = self.__discretize(self.bouts.astype("int"), self.__day)
         else:
             day_activity, _ = self.__discretize(self.activity * ~self.night, self.__day)
@@ -896,9 +844,7 @@ class CycleAnalyzer:
         else:
             return result, mean_result
 
-    def plot_light_activity(
-        self, bouts=False, filename=None, width=1000, height=600, dpi=100
-    ):
+    def plot_light_activity(self, bouts=False, filename=None, width=1000, height=600, dpi=100):
         """Calculate and plot :func:`light_activity` for each day.
 
         The plot also includes   total value based on data for all days.
@@ -934,9 +880,7 @@ class CycleAnalyzer:
             tick_mask[i] = True
         tick_mask[-1] = True
         tick_pos = np.arange(self.days)[tick_mask]
-        tick_labels = np.arange(self.start, self.stop, self.__day)[self.daily_mask][
-            tick_mask
-        ].astype("datetime64[D]")
+        tick_labels = np.arange(self.start, self.stop, self.__day)[self.daily_mask][tick_mask].astype("datetime64[D]")
         plt.xticks(tick_pos, tick_labels, rotation=90)
         plt.plot(values, color=graph_color)
         plt.axhline(total, color=total_color)
@@ -1036,9 +980,7 @@ class CycleAnalyzer:
         else:
             return result, total
 
-    def plot_intradaily_variability(
-        self, step="1h", bouts=False, filename=None, width=1000, height=600, dpi=100
-    ):
+    def plot_intradaily_variability(self, step="1h", bouts=False, filename=None, width=1000, height=600, dpi=100):
         """Calculate and plot :func:`intradaily_variability` for each day.
 
         The plot also includes the total value based on data for all days.
@@ -1078,9 +1020,7 @@ class CycleAnalyzer:
             tick_mask[i] = True
         tick_mask[-1] = True
         tick_pos = np.arange(self.days)[tick_mask]
-        tick_labels = np.arange(self.start, self.stop, self.__day)[self.daily_mask][
-            tick_mask
-        ].astype("datetime64[D]")
+        tick_labels = np.arange(self.start, self.stop, self.__day)[self.daily_mask][tick_mask].astype("datetime64[D]")
         plt.xticks(tick_pos, tick_labels, rotation=90)
         # plt.ylim(0, max(total, values.max())*1.05)
         plt.plot(values, color=graph_color)
@@ -1101,9 +1041,7 @@ class CycleAnalyzer:
         else:
             plt.show()
 
-    def relative_amplitude(
-        self, most_active="10h", least_active="5h", bouts=False, auc=False
-    ):
+    def relative_amplitude(self, most_active="10h", least_active="5h", bouts=False, auc=False):
         """Calculate relative amplitude.
 
         :type most_active: str|int|timedelta, optional
@@ -1128,30 +1066,22 @@ class CycleAnalyzer:
         """
 
         def window1d(a, width, step=1):
-            return a[
-                np.arange(0, width, step)[None, :]
-                + np.arange(0, a.size - width + 1, step)[:, None]
-            ]
+            return a[np.arange(0, width, step)[None, :] + np.arange(0, a.size - width + 1, step)[:, None]]
 
         most_active = pd.Timedelta(most_active).asm8
         least_active = pd.Timedelta(least_active).asm8
         if most_active + least_active + min(most_active, least_active) > self.__day:
             raise ValueError(
-                f"most_active + least_active + min(most_active, least_active) "
-                "should be no greater than 1 day"
+                f"most_active + least_active + min(most_active, least_active) " "should be no greater than 1 day"
             )
         if most_active <= self.__zero:
             raise ValueError(f"most_active should be > 0")
         if least_active <= self.__zero:
             raise ValueError(f"least_active should be > 0")
         if most_active % self.step != self.__zero:
-            raise ValueError(
-                f"most_active should be divisible by instance step ({str(self.step)})"
-            )
+            raise ValueError(f"most_active should be divisible by instance step ({str(self.step)})")
         if least_active % self.step != self.__zero:
-            raise ValueError(
-                f"least_active should be divisible by instance step ({str(self.step)})"
-            )
+            raise ValueError(f"least_active should be divisible by instance step ({str(self.step)})")
         if bouts:
             values = self.bouts
         else:
@@ -1170,15 +1100,10 @@ class CycleAnalyzer:
             least_active_val_1 = np.inf
             least_active_val_2 = np.inf
             if most_active_idx >= least_active_steps:
-                least_active_w = window1d(
-                    values[start : start + most_active_idx], least_active_steps
-                ).mean(-1)
+                least_active_w = window1d(values[start : start + most_active_idx], least_active_steps).mean(-1)
                 least_active_idx = least_active_w.argmin()
                 least_active_val_1 = least_active_w[least_active_idx]
-            if (
-                most_active_idx + most_active_steps + least_active_steps
-                <= self.steps_per_day
-            ):
+            if most_active_idx + most_active_steps + least_active_steps <= self.steps_per_day:
                 least_active_w = window1d(
                     values[start + most_active_idx + most_active_steps : stop],
                     least_active_steps,
@@ -1187,23 +1112,16 @@ class CycleAnalyzer:
                 least_active_val_2 = least_active_w[least_active_idx]
             least_active_val = min(least_active_val_1, least_active_val_2)
             if least_active_val == np.inf:
-                least_active_w = window1d(values[start:stop], least_active_steps).mean(
-                    -1
-                )
+                least_active_w = window1d(values[start:stop], least_active_steps).mean(-1)
                 least_active_idx = least_active_w.argmin()
                 least_active_val = least_active_w[least_active_idx]
                 most_active_val_1 = -np.inf
                 most_active_val_2 = -np.inf
                 if least_active_idx >= most_active_steps:
-                    most_active_w = window1d(
-                        values[start : start + least_active_idx], most_active_steps
-                    ).mean(-1)
+                    most_active_w = window1d(values[start : start + least_active_idx], most_active_steps).mean(-1)
                     most_active_idx = most_active_w.argmax()
                     most_active_val_1 = most_active_w[most_active_idx]
-                if (
-                    least_active_idx + least_active_steps + most_active_steps
-                    <= self.steps_per_day
-                ):
+                if least_active_idx + least_active_steps + most_active_steps <= self.steps_per_day:
                     most_active_w = window1d(
                         values[start + least_active_idx + least_active_steps : stop],
                         most_active_steps,
@@ -1214,14 +1132,10 @@ class CycleAnalyzer:
             total_most_active += most_active_val
             total_least_active += least_active_val
             if most_active_val:
-                result[i] = (most_active_val - least_active_val) / (
-                    most_active_val + least_active_val
-                )
+                result[i] = (most_active_val - least_active_val) / (most_active_val + least_active_val)
         total = 0.0
         if total_most_active:
-            total = (total_most_active - total_least_active) / (
-                total_most_active + total_least_active
-            )
+            total = (total_most_active - total_least_active) / (total_most_active + total_least_active)
         if auc:
             return result, total, self.__auc(result, 1)
         else:
@@ -1264,9 +1178,7 @@ class CycleAnalyzer:
         :type dpi: int, optional
         :param dpi: Plot resolution, defaults to 100.
         """
-        values, total, auc = self.relative_amplitude(
-            most_active, least_active, bouts, True
-        )
+        values, total, auc = self.relative_amplitude(most_active, least_active, bouts, True)
         graph_color = "#000000"
         total_color = "#808080"
         max_ticks = 20
@@ -1279,9 +1191,7 @@ class CycleAnalyzer:
             tick_mask[i] = True
         tick_mask[-1] = True
         tick_pos = np.arange(self.days)[tick_mask]
-        tick_labels = np.arange(self.start, self.stop, self.__day)[self.daily_mask][
-            tick_mask
-        ].astype("datetime64[D]")
+        tick_labels = np.arange(self.start, self.stop, self.__day)[self.daily_mask][tick_mask].astype("datetime64[D]")
         plt.xticks(tick_pos, tick_labels, rotation=90)
         # plt.ylim(0, 1)
         plt.plot(np.arange(self.days), values, color=graph_color)
@@ -1335,9 +1245,7 @@ class CycleAnalyzer:
         bout_counts = (np.diff(bouts, prepend=0, append=0, axis=-1) > 0).sum(axis=-1)
         bout_durations = np.zeros(self.days, dtype="float")
         mask = bout_counts > 0
-        bout_durations[mask] = (
-            self.step.astype("int") * bouts.sum(axis=-1)[mask] / bout_counts[mask]
-        )
+        bout_durations[mask] = self.step.astype("int") * bouts.sum(axis=-1)[mask] / bout_counts[mask]
         return bout_counts, bout_durations
 
     def plot_daily_bouts(
@@ -1377,9 +1285,7 @@ class CycleAnalyzer:
         :type dpi: int, optional
         :param dpi: Plot resolution, defaults to 100.
         """
-        bout_counts, bout_durations = self.daily_bouts(
-            max_gap, min_duration, min_activity
-        )
+        bout_counts, bout_durations = self.daily_bouts(max_gap, min_duration, min_activity)
         graph_color = "#000000"
         bar_color = "#808080"
         max_ticks = 20
@@ -1392,18 +1298,14 @@ class CycleAnalyzer:
             tick_mask[i] = True
         tick_mask[-1] = True
         tick_pos = np.arange(self.days)[tick_mask]
-        tick_labels = np.arange(self.start, self.stop, self.__day)[self.daily_mask][
-            tick_mask
-        ].astype("datetime64[D]")
+        tick_labels = np.arange(self.start, self.stop, self.__day)[self.daily_mask][tick_mask].astype("datetime64[D]")
         plt.xticks(tick_pos, tick_labels, rotation=90)
         plt.ylabel("N. bouts", fontsize=12)
         plt.bar(np.arange(self.days), bout_counts, color=bar_color)
         plt.twinx()
         plt.ylabel("Mean bout duration", fontsize=12)
         plt.plot(bout_durations, color=graph_color)
-        fig.text(
-            0.5, 0.95, f"Daily Bouts {self.descr}", ha="center", fontsize=20, wrap=False
-        )
+        fig.text(0.5, 0.95, f"Daily Bouts {self.descr}", ha="center", fontsize=20, wrap=False)
         if filename:
             plt.close(fig)
             fig.savefig(filename, dpi=dpi)
@@ -1474,9 +1376,7 @@ class CycleAnalyzer:
         else:
             plt.show()
 
-    def activity_onset(
-        self, step=None, percentile=20, N="6h", M="6h", bouts=False, mode="step"
-    ):
+    def activity_onset(self, step=None, percentile=20, N="6h", M="6h", bouts=False, mode="step"):
         """Calculate activity onset for each day.
 
         Activity onset for a given day is calculated as follows:
@@ -1571,24 +1471,18 @@ class CycleAnalyzer:
         else:
             raise ValueError(f"unrecognized mode")
         # If M != N, pad zeros to keep discontinuity at the center of kernel
-        kernel = np.concatenate(
-            (np.zeros(max(M - N, 0)), left, right, np.zeros(max(N - M, 0)))
-        )
+        kernel = np.concatenate((np.zeros(max(M - N, 0)), left, right, np.zeros(max(N - M, 0))))
         result = np.zeros(self.days, dtype="<M8[m]")
         for d in range(self.days):
             tmp = values[d]
             if tmp.max() > 0:
-                active = tmp >= np.percentile(
-                    tmp[tmp > 0], percentile, interpolation="higher"
-                )
+                active = tmp >= np.percentile(tmp[tmp > 0], percentile, interpolation="higher")
             else:
                 active = np.zeros(0, dtype="int")
             tmp[:] = -1
             tmp[active] = 1
             tmp = np.pad(tmp, steps_per_day, mode="constant", constant_values=-1)
-            t = np.correlate(tmp, kernel, mode="same")[
-                steps_per_day : 2 * steps_per_day
-            ]
+            t = np.correlate(tmp, kernel, mode="same")[steps_per_day : 2 * steps_per_day]
             idx = steps_per_day - t[::-1].argmax() - 1
             result[d] = timestamps[d * steps_per_day + idx]
         return result
@@ -1681,9 +1575,7 @@ class CycleAnalyzer:
             tick_mask[i] = True
         tick_mask[-1] = True
         tick_pos = np.arange(self.days)[tick_mask]
-        tick_labels = np.arange(self.start, self.stop, self.__day)[self.daily_mask][
-            tick_mask
-        ].astype("datetime64[D]")
+        tick_labels = np.arange(self.start, self.stop, self.__day)[self.daily_mask][tick_mask].astype("datetime64[D]")
         plt.xticks(tick_pos, tick_labels, rotation=90)
         plt.plot(values)
         fig.text(
