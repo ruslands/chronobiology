@@ -1,6 +1,7 @@
+from itertools import cycle
+
 import numpy as np
 import pandas as pd
-from itertools import cycle
 
 
 def generate_data(

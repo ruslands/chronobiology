@@ -1,0 +1,127 @@
+# https://peps.python.org/pep-0518/
+# https://www.toml-lint.com
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+
+[tool.poetry]
+name = "seller"
+version = "0.1.0"
+description = ""
+authors = ["Ruslan Konovalov <konovalov.rus@gmail.com>"]
+
+
+[tool.poetry.dependencies]
+influxdb = "^5.3.1"
+pandas = "^1.1.5"
+numpy = "^1.8.0"
+matplotlib = "^3.3.4"
+scipy = "^1.5.4"
+Sphinx = "^4.1.1"
+sphinx-rtd-theme = "^0.5.2"
+nbsphinx = "^0.8.6"
+pygments = "^2.9.0"
+ipython = "^7.16.1"
+
+[tool.poetry.group.lint.dependencies]
+ruff = "^0.0.260"
+mypy = "^1.11.2"
+mypy-extensions = "^1.0.0"
+pylint = "2.17.5"
+
+
+[tool.poe.tasks.ruff]
+cmd = "ruff app/ core/ tests/ --verbose"
+
+
+[tool.ruff]
+select = ["C","E","F","W","B"] # Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
+ignore = ["E501","F821","E722","F405","F403","B010","B904","C417","B008","C405","F811"]
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["A", "B", "C", "D", "E", "F", "G", "I", "N", "Q", "S", "T", "W", "ANN", "ARG", "BLE", "COM", "DJ", "DTZ", "EM", "ERA", "EXE", "FBT", "ICN", "INP", "ISC", "NPY", "PD", "PGH", "PIE", "PL", "PT", "PTH", "PYI", "RET", "RSE", "RUF", "SIM", "SLF", "TCH", "TID", "TRY", "UP", "YTT"]
+unfixable = []
+line-length = 88
+exclude = ["__init__.py", ".git", ".venv"]
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$" # Allow unused variables when underscore-prefixed.
+target-version = "py311"
+
+
+[tool.ruff.mccabe]
+max-complexity = 36
+
+
+[tool.black]
+target-version = ["py311",]
+line-length = 120
+include = '\.pyi?$'
+exclude = '''
+  \.git,
+  \.venv,
+  migrations
+'''
+
+[tool.isort]
+profile = "black"
+src_paths = ["app", "core", "tests"]
+line_length = 79
+skip = ["venv", "migrations", ".git", "proto"]
+multi_line_output = 3
+combine_as_imports = true
+include_trailing_comma = true
+lines_after_imports = 2
+use_parentheses = true
+
+
+[tool.mypy]
+python_version = "^3.11"
+mypy = ">=1.11.2,<2.0.0"
+ignore_missing_imports = true
+follow_imports = "silent"
+pretty = true
+exclude = ["tests/", "migrations/", "versions"]
+disallow_incomplete_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+warn_return_any = true
+strict_equality = true
+plugins = "pydantic.mypy"
+warn_unused_configs = true
+show_error_codes = true
+show_column_numbers = true
+check_untyped_defs = true
+strict_optional = true
+disallow_any_generics = true
+disallow_untyped_defs = true
+
+
+[tool.pylint.MASTER]
+extension-pkg-whitelist="pydantic"
+
+
+[tool.pylint.FORMAT]
+max-line-length = 120
+
+
+[[pydantic-mypy]]
+warn_required_dynamic_aliases = true
+warn_untyped_fields = true
+init_typed = true
+
+
+[[mypy-tests."*"]] # exclude doesn't work in some cases, e.g. in VSCode integration
+ignore_errors = true
+
+
+[tool.pytest]
+asyncio_mode = "auto"
+python_files = "test_*.py"
+python_functions = "test_*"
+python_classes = "*Test Test*"
+filterwarnings = "ignore::DeprecationWarning"
+log_level = "INFO"
+markers = "freeze_time: pytest-freezegun"
+addopts = "--suppress-no-test-exit-code"
