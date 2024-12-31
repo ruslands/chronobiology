@@ -12,7 +12,7 @@ circadian cycles data.
     .. autosummary::
         :nosignatures:
 
-        DBQuery
+        InfluxDBConnector
         CycleAnalyzer
 
     .. rubric:: Methods
@@ -23,7 +23,7 @@ circadian cycles data.
         generate_data
         generate_night
 
-    .. autoclass:: chronobiology.chronobiology.DBQuery
+    .. autoclass:: chronobiology.chronobiology.InfluxDBConnector
         :members:
 
         .. rubric:: Methods
