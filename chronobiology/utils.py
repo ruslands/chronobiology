@@ -120,3 +120,9 @@ def generate_night(timeseries, night_period="24h"):
         t0 = t0 + d0
         t1 = t1 + d1
     return is_night
+
+
+if __name__ == "__main__":
+    data = generate_data()
+    df = pd.DataFrame(data)
+    df.to_csv("data/output.csv", index=False)
