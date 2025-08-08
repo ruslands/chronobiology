@@ -40,13 +40,14 @@ For more theory see the following paper:
 :download:`Telling the Time with a Broken Clock: Quantifying Circadian Disruption in Animal Models <paper.pdf>`
 
 .. toctree::
-   :caption: Contents:
-   :maxdepth: 4
+    :caption: Contents:
+    :maxdepth: 4
 
-   storing_data
-   selecting_data
-   analyzing_data
-   chronobiology
+    installation
+    storing_data
+    selecting_data
+    analyzing_data
+    chronobiology
 
 Indices and tables
 ==================
